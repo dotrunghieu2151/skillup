@@ -4,10 +4,18 @@
     {
       "name": "vcpkg",
       "displayName": "Configure vcpkg",
+      "description": "Using compilers for Visual Studio 17 2022 (x64 architecture)",
+      "generator": "Visual Studio 17 2022",
+      "toolset": "host=x64",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_FIND_DEBUG_MODE": false,
-        "VCPKG_DISABLE_METRICS": false
+        "VCPKG_DISABLE_METRICS": false,
+        "CMAKE_C_COMPILER": "cl.exe",
+        "CMAKE_CXX_COMPILER": "cl.exe",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}"
       }
     }
   ],

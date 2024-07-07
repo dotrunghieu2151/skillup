@@ -2,6 +2,7 @@ add_library(Core STATIC)
 
 target_sources(Core 
   PRIVATE
+    Application.cpp
     Renderer.cpp
     VertexBuffer.cpp
     IndexBuffer.cpp
