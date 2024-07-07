@@ -2,15 +2,19 @@
 
 #include <imgui.h>
 
-#include "IEventEmitter.hpp"
+#include "EventEmitter.hpp"
 #include "UIComponent.hpp"
 
 namespace Core {
-class TodoListUIComponent : public UIComponent, IEventEmitter {
+class TodoListUIComponent : public UIComponent {
 public:
-  struct EventTodo : IEventEmitter::EventArgs {
+  struct EventTodo : Core::Event<TodoListUIComponent> {
     bool hi;
   };
+
+  EventEmitter<EventTodo> m_OnInitEvent{};
+
+  inline EventEmitter<EventTodo>& OnInitEvent() { return m_OnInitEvent; }
 
   TodoListUIComponent(bool& visible) : m_Visible{visible} {}
 
@@ -20,6 +24,7 @@ public:
       ImGui::End();
       return;
     }
+    OnInitEvent().Trigger(EventTodo{*this, true});
 
     static int lines = 10;
     ImGui::TextUnformatted(
@@ -32,18 +37,6 @@ public:
                   i); // Pad with space to extend size horizontally
     ImGui::End();
   }
-
-  void On(const char*, std::function<void(const EventTodo&)>) override {
-
-  };
-
-  void Off(const char*, std::function<void(const EventTodo&)>) override {
-
-  };
-
-  void Trigger(const char*, const EventTodo&) override {
-
-  };
 
 private:
   bool& m_Visible;

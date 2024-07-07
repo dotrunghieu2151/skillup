@@ -2,6 +2,7 @@
 
 #include "Application.hpp"
 #include "TodoListUIComponent.hpp"
+#include <iostream>
 
 class ExampleLayer : public Core::ApplicationLayer {
 public:
@@ -10,7 +11,15 @@ public:
   ExampleLayer()
       : todoListUIComponent{std::make_shared<Core::TodoListUIComponent>(open)} {
   }
-  virtual void OnUIRender() override {
+
+  void OnAttach() override {
+    todoListUIComponent->OnInitEvent() +=
+        [](const Core::TodoListUIComponent::EventTodo& event) {
+          ImGui::ShowDemoWindow();
+        };
+  }
+
+  void OnUIRender() override {
     if (ImGui::BeginMainMenuBar()) {
       if (ImGui::BeginMenu("File")) {
         if (ImGui::MenuItem("Create")) {
@@ -29,7 +38,6 @@ public:
     if (open) {
       todoListUIComponent->Render();
     }
-    ImGui::ShowDemoWindow();
   }
 };
 
