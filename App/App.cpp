@@ -2,22 +2,27 @@
 
 #include "Application.hpp"
 #include "TodoListUIComponent.hpp"
+#include <functional>
 #include <iostream>
+#include <memory>
 
 class ExampleLayer : public Core::ApplicationLayer {
 public:
+  using EventTodoCb =
+      std::function<void(const Core::TodoListUIComponent::EventTodo&)>;
+
+  std::shared_ptr<EventTodoCb> fn{std::make_shared<EventTodoCb>(
+      [](const Core::TodoListUIComponent::EventTodo& event) {
+        ImGui::ShowDemoWindow();
+      })};
+
   bool open{false};
   std::shared_ptr<Core::TodoListUIComponent> todoListUIComponent;
   ExampleLayer()
       : todoListUIComponent{std::make_shared<Core::TodoListUIComponent>(open)} {
   }
 
-  void OnAttach() override {
-    todoListUIComponent->OnInitEvent() +=
-        [](const Core::TodoListUIComponent::EventTodo& event) {
-          ImGui::ShowDemoWindow();
-        };
-  }
+  void OnAttach() override { todoListUIComponent->OnInitEvent() += fn; }
 
   void OnUIRender() override {
     if (ImGui::BeginMainMenuBar()) {
@@ -28,6 +33,7 @@ public:
         if (ImGui::MenuItem("Open", "Ctrl+O")) {
         }
         if (ImGui::MenuItem("Save", "Ctrl+S")) {
+          todoListUIComponent->OnInitEvent() -= fn;
         }
         if (ImGui::MenuItem("Save as..")) {
         }

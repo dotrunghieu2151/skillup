@@ -1,36 +1,44 @@
 #pragma once
 
 #include <algorithm>
+#include <assert.h>
 #include <concepts>
 #include <functional>
+#include <memory>
 #include <type_traits>
 #include <vector>
 
+#include "Event.hpp"
 namespace Core {
 
-template <typename Sender> struct Event {
-  const Sender& sender;
-};
+namespace EventSystem {
 
-template <typename EventType> class EventEmitter {
+template <typename C>
+concept IsEvent = requires(C c) { []<typename X>(Event<X>&) {}(c); };
+
+template <IsEvent EventType> class EventEmitter {
 public:
-  void operator+=(std::function<void(const EventType&)> callback) {
-    m_Listeners.push_back(callback);
-  }
+  using FunctionType = std::shared_ptr<std::function<void(const EventType&)>>;
 
-  void operator-=(std::function<void(const EventType&)> callback) {
+  void operator+=(FunctionType callback) { m_Listeners.push_back(callback); }
+
+  void operator-=(FunctionType callback) {
     auto iter = std::find(m_Listeners.begin(), m_Listeners.end(), callback);
+    if (iter == m_Listeners.end()) {
+      return;
+    }
     std::swap(*iter, m_Listeners.back());
     m_Listeners.pop_back();
   }
 
   void Trigger(const EventType& event) const {
-    for (auto cb : m_Listeners) {
-      cb(event);
+    for (auto cbSharedPtr : m_Listeners) {
+      (*cbSharedPtr)(event);
     }
   };
 
 private:
-  std::vector<std::function<void(const EventType&)>> m_Listeners{};
+  std::vector<FunctionType> m_Listeners{};
 };
+} // namespace EventSystem
 } // namespace Core

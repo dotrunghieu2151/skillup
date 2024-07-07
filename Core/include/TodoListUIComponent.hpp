@@ -8,13 +8,13 @@
 namespace Core {
 class TodoListUIComponent : public UIComponent {
 public:
-  struct EventTodo : Core::Event<TodoListUIComponent> {
+  struct EventTodo : EventSystem::Event<TodoListUIComponent> {
     bool hi;
   };
 
-  EventEmitter<EventTodo> m_OnInitEvent{};
-
-  inline EventEmitter<EventTodo>& OnInitEvent() { return m_OnInitEvent; }
+  inline EventSystem::EventEmitter<EventTodo>& OnInitEvent() {
+    return m_OnInitEvent;
+  }
 
   TodoListUIComponent(bool& visible) : m_Visible{visible} {}
 
@@ -39,6 +39,7 @@ public:
   }
 
 private:
+  EventSystem::EventEmitter<EventTodo> m_OnInitEvent{};
   bool& m_Visible;
   bool m_IsLoading{false};
 };
