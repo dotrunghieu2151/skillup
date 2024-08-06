@@ -4,8 +4,8 @@
 #include <sstream>
 #include <string>
 
-#include "Renderer.hpp"
-#include "Shader.hpp"
+#include "Core/Renderer.hpp"
+#include "Core/Shader.hpp"
 
 Shader::Shader(const std::string& filepath)
     : m_Filepath{filepath}, m_RendererID{0} {

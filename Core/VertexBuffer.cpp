@@ -1,5 +1,5 @@
-#include "VertexBuffer.hpp"
-#include "Renderer.hpp"
+#include "Core/VertexBuffer.hpp"
+#include "Core/Renderer.hpp"
 
 VertexBuffer::VertexBuffer(const void* data, unsigned int size) {
   // create buffer

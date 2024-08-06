@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -49,15 +50,44 @@ public:
     m_EventQueue.push(func);
   }
 
-  template <typename T> void PushLayer() {
-    static_assert(std::is_base_of<ApplicationLayer, T>::value,
-                  "Pushed type is not subclass of Layer!");
+  template <std::derived_from<ApplicationLayer> T> void PushLayer() {
     m_LayerList.emplace_back(std::make_shared<T>())->OnAttach();
+  }
+
+  template <std::derived_from<ApplicationLayer> T>
+  void PushLayer(const std::string& id) {
+    auto insert = m_LayerList.emplace_back(std::make_shared<T>());
+    insert->SetId(id);
+    insert->OnAttach();
   }
 
   void PushLayer(const std::shared_ptr<ApplicationLayer>& layer) {
     m_LayerList.emplace_back(layer);
     layer->OnAttach();
+  }
+
+  template <std::derived_from<ApplicationLayer> T>
+  std::shared_ptr<T> GetLayer() {
+    for (std::shared_ptr<ApplicationLayer> p : m_LayerList) {
+      std::shared_ptr<T> layer{std::dynamic_pointer_cast<T>(p)};
+      if (layer) {
+        return layer;
+      }
+    }
+
+    return nullptr;
+  }
+
+  template <std::derived_from<ApplicationLayer> T>
+  std::shared_ptr<T> GetLayer(const std::string& id) {
+    for (std::shared_ptr<ApplicationLayer> p : m_LayerList) {
+      std::shared_ptr<T> layer{std::dynamic_pointer_cast<T>(p)};
+      if (layer && layer->GetId() == id) {
+        return layer;
+      }
+    }
+
+    return nullptr;
   }
 
   static Application& Get();

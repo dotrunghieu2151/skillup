@@ -1,5 +1,5 @@
-#include "IndexBuffer.hpp"
-#include "Renderer.hpp"
+#include "Core/IndexBuffer.hpp"
+#include "Core/Renderer.hpp"
 #include <assert.h>
 
 IndexBuffer::IndexBuffer(const unsigned int* data, unsigned int count)
