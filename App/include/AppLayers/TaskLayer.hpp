@@ -1,24 +1,48 @@
 #pragma once
 
+#include <string>
+#include <unordered_map>
 #include <vector>
 
-#include "Components/TaskListUIComponent.hpp"
+#include "Components/TaskGroupListUIComponent.hpp"
 #include "Core/Application.hpp"
+#include "Entities/TaskItem.hpp"
 
 class TaskLayer : public Core::ApplicationLayer {
 public:
   bool open{false};
-  std::vector<TaskUIItem> v{{TaskUIItem{"test", "despcriotn", 0.2f, false},
-                             TaskUIItem{"fda", "Da", 0.9f, true}}};
-  std::shared_ptr<TaskListUIComponent> taskListUIComponent;
+  std::vector<TaskGroup> m{
+      {"group 1",
+       std::vector<TaskItem>{
+           {TaskItem{
+                "test", "despcriotn", 0.2f, false,
+                std::vector<TaskItem>{{TaskItem{"test 1", "", 0.3f, false},
+                                       TaskItem{"test 1.2", "", 0.4f, false}}}},
+            TaskItem{"fda", "Da", 0.9f, true,
+                     std::vector<TaskItem>{
+                         {TaskItem{"test 2", "", 0.6f, false},
+                          TaskItem{"test 2.2", "", 0.8f, false}}}}}}},
+      {"group 2",
+       std::vector<TaskItem>{
+           {TaskItem{
+                "test", "despcriotn", 0.2f, false,
+                std::vector<TaskItem>{{TaskItem{"test 1", "", 0.3f, false},
+                                       TaskItem{"test 1.2", "", 0.4f, false}}}},
+            TaskItem{"fda", "Da", 0.9f, true,
+                     std::vector<TaskItem>{
+                         {TaskItem{"test 2", "", 0.6f, false},
+                          TaskItem{"test 2.2", "", 0.8f, false}}}}}}},
+  };
+  std::shared_ptr<TaskGroupListUIComponent> taskGroupListUIComponent;
   TaskLayer()
-      : taskListUIComponent{std::make_shared<TaskListUIComponent>(open, v)} {}
+      : taskGroupListUIComponent{
+            std::make_shared<TaskGroupListUIComponent>(open, m)} {}
 
   void OnAttach() override {}
 
   void OnUIRender() override {
     if (open) {
-      taskListUIComponent->Render();
+      taskGroupListUIComponent->Render();
     }
   }
 
