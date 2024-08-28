@@ -9,8 +9,11 @@ target_sources(Core
     VertexArray.cpp
     Shader.cpp
     Texture.cpp
+    VertexBufferLayout.cpp
+    Serialization/StreamWriter.cpp
+    Serialization/StreamReader.cpp
 )
-target_include_directories(Core PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
+target_include_directories(Core PUBLIC ${CMAKE_CURRENT_LIST_DIR})
 
 target_link_libraries(Core PUBLIC glfw)
 target_link_libraries(Core PUBLIC OpenGL::GL)

@@ -29,6 +29,7 @@ find_package(glm CONFIG REQUIRED)
 
 
 # Include dir
+include_directories(${CMAKE_CURRENT_LIST_DIR})
 add_subdirectory(Vendors)
 add_subdirectory(Core)
 add_subdirectory(App)

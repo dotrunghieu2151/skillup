@@ -1,0 +1,111 @@
+#pragma once
+
+#include "Buffer.hpp"
+#include <cassert>
+#include <map>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+namespace Core {
+class StreamReader {
+public:
+  virtual ~StreamReader() = default;
+
+  virtual bool IsStreamGood() const = 0;
+  virtual uint64_t GetStreamPosition() const = 0;
+  virtual void SetStreamPosition(uint64_t position) = 0;
+  virtual bool ReadData(const char* destination, size_t size) = 0;
+
+  operator bool() const { return IsStreamGood(); }
+
+  bool ReadBuffer(Buffer& buffer);
+  bool ReadString(std::string& str);
+
+  template <typename T> bool ReadRaw(T& type) {
+    bool success{ReadData((char*)&type, sizeof(T))};
+    assert(success && "ReadRaw failed");
+    return success;
+  }
+
+  template <typename T> void ReadObject(T& obj) { T::Deserialize(this, obj); }
+
+  template <typename Key, typename Value>
+  void ReadMap(std::unordered_map<Key, Value>& map, uint32_t size = 0) {
+    if (size == 0) {
+      ReadRaw<uint32_t>(size);
+    }
+
+    for (uint32_t i = 0; i < size; ++i) {
+      Key key;
+      if constexpr (std::is_trivial<Key>()) {
+        ReadRaw<Key>(key);
+      } else {
+        ReadObject<Key>(key);
+      }
+
+      if constexpr (std::is_trivial<Value>()) {
+        ReadRaw<Value>(map[key]);
+      } else {
+        ReadObject<Value>(map[key]);
+      }
+    }
+  }
+
+  template <typename Value>
+  void ReadMap(std::unordered_map<std::string, Value>& map, uint32_t size = 0) {
+    if (size == 0) {
+      ReadRaw<uint32_t>(size);
+    }
+
+    std::string key;
+
+    ReadString(key);
+
+    if constexpr (std::is_trivial<Value>()) {
+      ReadRaw<Value>(map[key]);
+    } else {
+      ReadObject<Value>(map[key]);
+    }
+  }
+
+  template <typename Key, typename Value>
+  void ReadMap(std::map<Key, Value>& map, uint32_t size = 0) {
+    if (size == 0) {
+      ReadRaw<uint32_t>(size);
+    }
+
+    for (uint32_t i = 0; i < size; ++i) {
+      Key key;
+      if constexpr (std::is_trivial<Key>()) {
+        ReadRaw<Key>(key);
+      } else {
+        ReadObject<Key>(key);
+      }
+
+      if constexpr (std::is_trivial<Value>()) {
+        ReadRaw<Value>(map[key]);
+      } else {
+        ReadObject<Value>(map[key]);
+      }
+    }
+  }
+
+  template <typename Value>
+  void ReadArray(std::vector<Value>& array, uint32_t size = 0) {
+    if (size == 0) {
+      ReadRaw<uint32_t>(size);
+    }
+
+    array.resize(size);
+
+    for (uint32_t i = 0; i < size; ++i) {
+      if constexpr (std::is_trivial<Value>()) {
+        ReadRaw<Value>(array[i]);
+      } else {
+        ReadObject<Value>(array[i]);
+      }
+    }
+  }
+};
+} // namespace Core

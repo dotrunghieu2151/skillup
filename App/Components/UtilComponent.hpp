@@ -23,11 +23,17 @@ void TaskItemUIComponent(const std::string& id, TaskItem& task) {
       ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick |
           ImGuiTreeNodeFlags_SpanTextWidth | ImGuiTreeNodeFlags_FramePadding);
   ImGui::PopStyleVar();
-  if (ImGui::Checkbox((id + "_Checkbox").c_str(), &task.checked)) {
-    if (task.checked) {
-      task.progress = 1.0f;
-    } else {
-      task.progress = 0.0f;
+  if (task.subTasks.size()) {
+    ImGui::BeginDisabled();
+    ImGui::Checkbox((id + "_Checkbox").c_str(), &task.checked);
+    ImGui::EndDisabled();
+  } else {
+    if (ImGui::Checkbox((id + "_Checkbox").c_str(), &task.checked)) {
+      if (task.checked) {
+        task.progress = 1.0f;
+      } else {
+        task.progress = 0.0f;
+      }
     }
   }
   ImGui::SameLine();
