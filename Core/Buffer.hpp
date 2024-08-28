@@ -62,11 +62,11 @@ public:
   }
 
   template <typename T> T& Read(uint32_t offset = 0) {
-    return *(T*)((uint32_t*)m_Data + offset);
+    return *(T*)((uint8_t*)m_Data + offset);
   }
 
   template <typename T> const T& Read(uint32_t offset = 0) const {
-    return *(T*)((uint32_t*)m_Data + offset);
+    return *(T*)((uint8_t*)m_Data + offset);
   }
 
   uint8_t* CopyBytes(uint32_t size, uint32_t offset) const {

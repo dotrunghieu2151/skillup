@@ -13,9 +13,9 @@ public:
   virtual ~StreamReader() = default;
 
   virtual bool IsStreamGood() const = 0;
-  virtual uint64_t GetStreamPosition() const = 0;
+  virtual uint64_t GetStreamPosition() = 0;
   virtual void SetStreamPosition(uint64_t position) = 0;
-  virtual bool ReadData(const char* destination, size_t size) = 0;
+  virtual bool ReadData(char* destination, uint32_t size) = 0;
 
   operator bool() const { return IsStreamGood(); }
 

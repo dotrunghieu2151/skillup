@@ -7,7 +7,7 @@
 #include <filesystem>
 #include <fstream>
 
-namespace Walnut {
+namespace Core {
 //==============================================================================
 /// BufferStreamWriter
 class BufferStreamWriter : public StreamWriter {
@@ -21,7 +21,7 @@ public:
   void SetStreamPosition(uint64_t position) override {
     m_BufferPosition = position;
   }
-  bool WriteData(const char* data, size_t size) final;
+  bool WriteData(const char* data, uint32_t size) final;
 
   // Returns Buffer with currently written size
   Buffer GetBuffer() const { return Buffer(m_TargetBuffer, m_BufferPosition); }
@@ -44,7 +44,7 @@ public:
   void SetStreamPosition(uint64_t position) override {
     m_BufferPosition = position;
   }
-  bool ReadData(char* destination, size_t size) override;
+  bool ReadData(char* destination, uint32_t size) override;
 
   // Returns Buffer with currently read size
   Buffer GetBuffer() const { return Buffer(m_TargetBuffer, m_BufferPosition); }
@@ -54,4 +54,4 @@ private:
   uint64_t m_BufferPosition = 0;
 };
 
-} // namespace Walnut
+} // namespace Core

@@ -12,6 +12,8 @@ target_sources(Core
     VertexBufferLayout.cpp
     Serialization/StreamWriter.cpp
     Serialization/StreamReader.cpp
+    Serialization/BufferStream.cpp
+    Serialization/FileStream.cpp
 )
 target_include_directories(Core PUBLIC ${CMAKE_CURRENT_LIST_DIR})
 
