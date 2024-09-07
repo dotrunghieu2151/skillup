@@ -3,7 +3,6 @@ add_executable(skillup App.cpp)
 target_include_directories(skillup PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 
 target_link_libraries(skillup PRIVATE Core)
-target_link_libraries(skillup PRIVATE Test)
 
 # sym link assets
 set (assetSource "${CMAKE_SOURCE_DIR}/Assets")

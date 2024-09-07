@@ -3,6 +3,8 @@
 #include <iostream>
 
 #include "Core/Application.hpp"
+#include "Core/Queue/MpmcQueue.hpp"
+#include "Core/Queue/SpscQueue.hpp"
 #include "TaskLayer.hpp"
 
 class MainMenuLayer : public Core::ApplicationLayer {

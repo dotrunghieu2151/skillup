@@ -14,13 +14,13 @@
       "version>=": "3.4"
     },
     {
-      "name": "imgui",
-      "features": ["glfw-binding", "opengl3-binding", "docking-experimental"],
-      "version>=": "1.90.7"
-    },
-    {
       "name": "glm",
       "version>=": "1.0.1#2"
+    },
+    {
+      "name": "imgui",
+      "features": ["docking-experimental", "glfw-binding", "opengl3-binding"],
+      "version>=": "1.90.7"
     }
   ]
 }

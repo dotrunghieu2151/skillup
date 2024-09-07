@@ -18,6 +18,7 @@ endif()
 
 project(skillup VERSION 0.1.0 LANGUAGES CXX)
 
+option (BUILD_TESTS "Override building of tests" ON)
 
 # Packagegs
 
@@ -33,7 +34,19 @@ include_directories(${CMAKE_CURRENT_LIST_DIR})
 add_subdirectory(Vendors)
 add_subdirectory(Core)
 add_subdirectory(App)
-add_subdirectory(Tests)
 
-include(CTest)
-enable_testing()
+if (BUILD_TESTS)
+  # install external package from git START
+  include(FetchContent) 
+  FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+  )
+  FetchContent_MakeAvailable(googletest)
+  # For Windows: Prevent overriding the parent project's compiler/linker settings
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+  include(googletest)
+  
+  add_subdirectory(Tests)
+  enable_testing()
+endif()

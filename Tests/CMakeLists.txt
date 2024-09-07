@@ -1,9 +1,8 @@
-add_library(Test STATIC)
-
-target_sources(Test
-  PRIVATE
-    Test.cpp
+SET(all_files_in_test_dir 
+  Test.cpp
 )
-target_include_directories(Test PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
+add_executable(AllTests ${all_files_in_test_dir})
+target_link_libraries(AllTests PRIVATE GTest::gtest GTest::gtest_main GTest::gmock GTest::gmock_main)
+target_link_libraries(AllTests PUBLIC Core)
 
-target_link_libraries(Test PUBLIC Core)
+add_test(AllTests AllTests)
