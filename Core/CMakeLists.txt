@@ -21,5 +21,6 @@ target_link_libraries(Core PUBLIC glfw)
 target_link_libraries(Core PUBLIC OpenGL::GL)
 target_link_libraries(Core PUBLIC GLEW::GLEW)
 target_link_libraries(Core PUBLIC glm::glm-header-only)
+target_link_libraries(Core PUBLIC fmt::fmt-header-only)
 
 target_link_libraries(Core PUBLIC Vendors)

@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include <fmt/core.h>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
@@ -19,7 +20,7 @@ void TaskItemUIComponent(const std::string& id, TaskItem& task) {
   ImGui::BeginGroup();
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 5.0f));
   bool showThisTask = ImGui::TreeNodeEx(
-      std::format("{}###{}", task.title, id).c_str(),
+      fmt::format("{}###{}", task.title, id).c_str(),
       ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick |
           ImGuiTreeNodeFlags_SpanTextWidth | ImGuiTreeNodeFlags_FramePadding);
   ImGui::PopStyleVar();
@@ -69,7 +70,7 @@ void TaskItemUIComponent(const std::string& id, TaskItem& task) {
 
     ImGui::SetItemTooltip("Right-click to add task");
     if (ImGui::BeginPopupContextItem(
-            std::format("###{}_add_task", id)
+            fmt::format("###{}_add_task", id)
                 .c_str())) // <-- use last item id as popup id
     {
       if (ImGui::Button("Add task")) {
@@ -85,7 +86,7 @@ void TaskItemUIComponent(const std::string& id, TaskItem& task) {
         TaskItemUIComponent(id + "_st_" + std::to_string(i), item);
         ImGui::SetItemTooltip("Right-click to delete");
         if (ImGui::BeginPopupContextItem(
-                std::format("###{}_{}", item.title, i)
+                fmt::format("###{}_{}", item.title, i)
                     .c_str())) // <-- use last item id as popup id
         {
           if (ImGui::Button("Delete")) {
@@ -144,7 +145,7 @@ void TaskGroupUIComponent(const std::string& taskGroupName,
     TaskItemUIComponent("###TaskItem_" + std::to_string(i), item);
     ImGui::SetItemTooltip("Right-click to delete");
     if (ImGui::BeginPopupContextItem(
-            std::format("###{}_{}", item.title, i)
+            fmt::format("###{}_{}", item.title, i)
                 .c_str())) // <-- use last item id as popup id
     {
       if (ImGui::Button("Delete")) {

@@ -227,7 +227,6 @@ void Application::Init() {
 
   // Load default font
   ImFontConfig fontConfig;
-  fontConfig.FontDataOwnedByAtlas = false;
   ImFont* robotoFont = io.Fonts->AddFontFromFileTTF(
       "Assets/Fonts/Roboto-Regular.ttf", 20.0f, &fontConfig);
   s_Fonts["Default"] = robotoFont;

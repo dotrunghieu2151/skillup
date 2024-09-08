@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <fmt/core.h>
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
@@ -52,7 +53,7 @@ public:
     for (int i{0}; i < m_Items.size(); ++i) {
       TaskGroup& tg{m_Items[i]};
       if (m_TextFilter.PassFilter(tg.title.c_str())) {
-        if (ImGui::Button(std::format("{}###{}", tg.title.c_str(), i).c_str(),
+        if (ImGui::Button(fmt::format("{}###{}", tg.title.c_str(), i).c_str(),
                           ImVec2(0.0f, 0.0f))) {
           tg.open = !tg.open;
         }
@@ -89,7 +90,7 @@ public:
       }
       if (tg.open) {
         TaskGroupUIComponent(
-            std::format("{}###{}", tg.title.c_str(), i).c_str(), tg.subTasks,
+            fmt::format("{}###{}", tg.title.c_str(), i).c_str(), tg.subTasks,
             tg.open);
       }
     }

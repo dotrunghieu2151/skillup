@@ -4,6 +4,7 @@ target_include_directories(skillup PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 
 target_link_libraries(skillup PRIVATE Core)
 
+
 # sym link assets
 set (assetSource "${CMAKE_SOURCE_DIR}/Assets")
 

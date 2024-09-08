@@ -9,7 +9,7 @@
 
 class MainMenuLayer : public Core::ApplicationLayer {
 private:
-  std::shared_ptr<TaskLayer> m_TaskListUIComponent{};
+  std::shared_ptr<TaskLayer> m_TaskListUIComponent{nullptr};
   bool m_ShowDemoWindow{false};
 
 public:
