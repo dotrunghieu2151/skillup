@@ -16,9 +16,18 @@ else ()
   set(CMAKE_CXX_FLAGS_RELEASE "-Ox")
 endif()
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+
 project(skillup VERSION 0.1.0 LANGUAGES CXX)
 
 option (BUILD_TESTS "Override building of tests" ON)
+option (MEMORY_DEBUG "Override enabling memory debug" ON)
+
+if (MEMORY_DEBUG)
+  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
+  add_compile_options(-fsanitize=address)
+  add_link_options(-fsanitize=address)
+endif()
 
 # Packagegs
 

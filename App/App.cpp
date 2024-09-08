@@ -1,5 +1,3 @@
-#include <memory>
-
 #include <functional>
 #include <iostream>
 #include <memory>

@@ -9,7 +9,11 @@ namespace Core {
 template <typename Element, std::size_t Size> class SpscQueue {
 public:
   static constexpr size_t Capacity{Size + 1};
-  SpscQueue() : _tail(0), _head(0), _array{new (std::align_val_t(std::hardware_destructive_interference_size)) Element[Capacity]} {}
+  SpscQueue()
+      : _tail(0), _head(0),
+        _array{static_cast<Element*>(::operator new[](
+            sizeof(Element) * Capacity,
+            std::align_val_t(std::hardware_destructive_interference_size)))} {}
 
   // not thread-safe make sure destructor is called when no thread is working on
   // it
@@ -20,7 +24,8 @@ public:
       _array[currentHead].~Element();
       currentHead = Increment(currentHead);
     }
-    ::operator delete[](_array, std::align_val_t(std::hardware_destructive_interference_size));
+    ::operator delete[](
+        _array, std::align_val_t(std::hardware_destructive_interference_size));
   };
 
   SpscQueue(const SpscQueue&) = delete;
@@ -52,7 +57,7 @@ public:
   bool Pop(Element& item) {
     const auto currentHead = _head.load(std::memory_order_relaxed);
     if (currentHead == _tail.load(std::memory_order_acquire)) {
-       return false; // empty queue 
+      return false; // empty queue
     }
 
     item = std::move(_array[currentHead]);

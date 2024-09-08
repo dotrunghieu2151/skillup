@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+// #include <immintrin.h>
 #include <new>
 #include <thread>
 
@@ -11,8 +12,9 @@ public:
   static constexpr size_t Capacity{Size + 1};
   McmpQueue()
       : _wCommitted{0}, _wPending{0}, _rCommitted{0}, _rPending{0},
-        _array{new(std::align_val_t(
-            std::hardware_destructive_interference_size)) Element[Capacity]} {}
+        _array{static_cast<Element*>(::operator new[](
+            sizeof(Element) * Capacity,
+            std::align_val_t(std::hardware_destructive_interference_size)))} {}
 
   // not thread-safe make sure destructor is called when no thread is working
   // on it
@@ -69,6 +71,7 @@ public:
       }
       // cpu pause instruction
       // better performance than sleep(0)
+      // _mm_pause();
       std::this_thread::yield();
     };
   }
@@ -125,9 +128,9 @@ public:
         return false;
       }
       newPendingR = pendingR + 1;
-    } while (_rPending.compare_exchange_weak(pendingR, newPendingR,
-                                             std::memory_order_release,
-                                             std::memory_order_relaxed));
+    } while (!_rPending.compare_exchange_weak(pendingR, newPendingR,
+                                              std::memory_order_release,
+                                              std::memory_order_relaxed));
 
     item = std::move(_array[ToIndex(pendingR)]);
 
