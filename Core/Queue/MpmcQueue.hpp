@@ -133,7 +133,7 @@ public:
                                               std::memory_order_relaxed));
 
     item = std::move(_array[ToIndex(pendingR)]);
-
+    _array[ToIndex(pendingR)].~Element();
     auto temp = pendingR;
     while (true) {
       if (_rCommitted.compare_exchange_weak(temp = pendingR, newPendingR,
@@ -145,7 +145,12 @@ public:
     }
   }
 
-  inline size_t GetSize() const { return Size; }
+  inline size_t GetSize() const {
+    return _wCommitted.load(std::memory_order_relaxed) -
+           _rCommitted.load(std::memory_order_relaxed);
+  }
+
+  inline bool IsEmpty() const { return GetSize() == 0; }
 
 private:
   inline size_t Increment(size_t idx) const { return idx + 1; }
