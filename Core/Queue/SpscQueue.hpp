@@ -18,11 +18,11 @@ public:
   // not thread-safe make sure destructor is called when no thread is working on
   // it
   virtual ~SpscQueue() {
-    auto currentHead = _head.load(std::memory_order_relaxed);
-    auto currentTail = _tail.load(std::memory_order_relaxed);
+    auto currentHead = ToIndex(_head.load(std::memory_order_relaxed));
+    auto currentTail = ToIndex(_tail.load(std::memory_order_relaxed));
     while (currentHead != currentTail) {
       _array[currentHead].~Element();
-      currentHead = Increment(currentHead);
+      currentHead = ToIndex(Increment(currentHead));
     }
     ::operator delete[](
         _array, std::align_val_t(std::hardware_destructive_interference_size));
@@ -34,8 +34,8 @@ public:
   bool Push(const Element& item) {
     const auto currentTail = _tail.load(std::memory_order_relaxed);
     const auto nextTail = Increment(currentTail);
-    if (nextTail != _head.load(std::memory_order_acquire)) {
-      _array[currentTail] = item;
+    if (ToIndex(nextTail) != ToIndex(_head.load(std::memory_order_acquire))) {
+      _array[ToIndex(currentTail)] = item;
       _tail.store(nextTail, std::memory_order_release);
       return true;
     }
@@ -46,8 +46,8 @@ public:
   bool Push(Element&& item) {
     const auto currentTail = _tail.load(std::memory_order_relaxed);
     const auto nextTail = Increment(currentTail);
-    if (nextTail != _head.load(std::memory_order_acquire)) {
-      _array[currentTail] = std::move(item);
+    if (ToIndex(nextTail) != ToIndex(_head.load(std::memory_order_acquire))) {
+      _array[ToIndex(currentTail)] = std::move(item);
       _tail.store(nextTail, std::memory_order_release);
       return true;
     }
@@ -56,19 +56,31 @@ public:
   }
   bool Pop(Element& item) {
     const auto currentHead = _head.load(std::memory_order_relaxed);
-    if (currentHead == _tail.load(std::memory_order_acquire)) {
+    const auto nextHead = Increment(currentHead);
+    const size_t index{ToIndex(currentHead)};
+    if (index == ToIndex(_tail.load(std::memory_order_acquire))) {
       return false; // empty queue
     }
 
-    item = std::move(_array[currentHead]);
-    _head.store(Increment(currentHead), std::memory_order_release);
+    item = std::move(_array[index]);
+    _array[index].~Element();
+
+    _head.store(nextHead, std::memory_order_release);
     return true;
   }
 
-  inline size_t GetSize() const { return Size; }
+  inline size_t GetSize() const {
+    return _tail.load(std::memory_order_relaxed) -
+           _head.load(std::memory_order_relaxed);
+  }
+
+  inline bool IsEmpty() const { return GetSize() == 0; }
 
 private:
-  size_t Increment(size_t idx) const { return (idx + 1) % Capacity; }
+  inline size_t Increment(size_t idx) const { return idx + 1; }
+  inline size_t ToIndex(size_t readOrWriteSequence) const {
+    return readOrWriteSequence % Capacity;
+  }
 
   Element* _array;
   alignas(
