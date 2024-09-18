@@ -249,17 +249,6 @@ void Application::Run() {
 
     glfwPollEvents();
 
-    {
-      std::scoped_lock<std::mutex> lock(m_EventQueueMutex);
-
-      // Process custom event queue
-      while (m_EventQueue.size() > 0) {
-        auto& func = m_EventQueue.front();
-        func();
-        m_EventQueue.pop();
-      }
-    }
-
     // update layers
     for (auto& layer : m_LayerList) {
       layer->OnUpdate(m_TimeStep);

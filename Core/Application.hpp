@@ -46,10 +46,6 @@ public:
     m_MenubarCallback = menubarCallback;
   }
 
-  template <typename Func> void QueueEvent(Func&& func) {
-    m_EventQueue.push(func);
-  }
-
   template <std::derived_from<ApplicationLayer> T> void PushLayer() {
     m_LayerList.emplace_back(std::make_shared<T>())->OnAttach();
   }
@@ -111,9 +107,6 @@ private:
 
   std::vector<std::shared_ptr<ApplicationLayer>> m_LayerList;
   std::function<void()> m_MenubarCallback;
-
-  std::mutex m_EventQueueMutex;
-  std::queue<std::function<void()>> m_EventQueue;
 
   void Init();
   void Shutdown();

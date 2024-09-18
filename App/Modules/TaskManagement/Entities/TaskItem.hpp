@@ -7,6 +7,7 @@
 #include "Core/Serialization/StreamReader.hpp"
 #include "Core/Serialization/StreamWriter.hpp"
 
+namespace TaskManagement {
 struct TaskItem {
   std::string title{};
   std::string description{};
@@ -49,3 +50,4 @@ struct TaskGroup {
     stream->ReadRaw(instance.open);
   }
 };
+}

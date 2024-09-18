@@ -5,16 +5,17 @@
 #include "Core/Application.hpp"
 #include "Core/Queue/MpmcQueue.hpp"
 #include "Core/Queue/SpscQueue.hpp"
-#include "TaskLayer.hpp"
+#include "Modules/TaskManagement/TaskLayer.hpp"
 
 class MainMenuLayer : public Core::ApplicationLayer {
 private:
-  std::shared_ptr<TaskLayer> m_TaskListUIComponent{nullptr};
+  std::shared_ptr<TaskManagement::TaskLayer> m_TaskListUIComponent{nullptr};
   bool m_ShowDemoWindow{false};
 
 public:
   void OnAwake() override {
-    m_TaskListUIComponent = Core::Application::Get().GetLayer<TaskLayer>();
+    m_TaskListUIComponent =
+        Core::Application::Get().GetLayer<TaskManagement::TaskLayer>();
   }
   void OnUIRender() override {
     if (ImGui::BeginMainMenuBar()) {

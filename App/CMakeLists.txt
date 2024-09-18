@@ -4,6 +4,10 @@ target_include_directories(skillup PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 
 target_link_libraries(skillup PRIVATE Core)
 
+add_subdirectory(Modules/TaskManagement)
+
+target_link_libraries(skillup PRIVATE TaskManagement)
+
 
 # sym link assets
 set (assetSource "${CMAKE_SOURCE_DIR}/Assets")

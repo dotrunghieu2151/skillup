@@ -2,16 +2,16 @@
 #include <iostream>
 #include <memory>
 
-#include "AppLayers/MainMenuLayer.hpp"
-#include "AppLayers/TaskLayer.hpp"
 #include "Core/Application.hpp"
+#include "MainMenuLayer.hpp"
+#include "Modules/TaskManagement/TaskLayer.hpp"
 
 int main(void) {
   Core::ApplicationSpecification spec{};
   Core::Application* app = new Core::Application{spec};
 
   app->PushLayer<MainMenuLayer>();
-  app->PushLayer<TaskLayer>();
+  app->PushLayer<TaskManagement::TaskLayer>();
 
   app->Run();
   delete app;

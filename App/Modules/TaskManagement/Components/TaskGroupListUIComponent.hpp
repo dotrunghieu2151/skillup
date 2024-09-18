@@ -18,6 +18,7 @@
 #include "Entities/TaskItem.hpp"
 #include "UtilComponent.hpp"
 
+namespace TaskManagement {
 class TaskGroupListUIComponent : public Core::UIStatefulComponent {
 public:
   // struct EventTask : Core::EventSystem::Event<TaskListUIComponent> {
@@ -128,3 +129,4 @@ private:
     }
   }
 };
+}

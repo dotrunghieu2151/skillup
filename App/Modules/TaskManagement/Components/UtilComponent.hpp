@@ -16,6 +16,7 @@
 #include "Core/UtilComponent.hpp"
 #include "Entities/TaskItem.hpp"
 
+namespace TaskManagement {
 void TaskItemUIComponent(const std::string& id, TaskItem& task) {
   ImGui::BeginGroup();
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 5.0f));
@@ -176,4 +177,5 @@ void TaskGroupUIComponent(const std::string& taskGroupName,
   }
 
   ImGui::End();
+}
 }
