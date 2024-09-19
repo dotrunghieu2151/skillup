@@ -29,13 +29,20 @@ public:
   //   return m_OnInitEvent;
   // }
 
-  TaskGroupListUIComponent(bool& visible, std::vector<TaskGroup>& items)
-      : m_Visible{visible}, m_Items{items} {}
+  TaskGroupListUIComponent(bool& visible, std::vector<TaskGroup>& items,
+                           bool& isLoadingTask, bool& isSavingTask)
+      : m_Visible{visible}, m_Items{items}, m_IsLoadingTasks{isLoadingTask},
+        m_IsSavingTasks{isSavingTask} {}
 
   void Render() override {
     if (!ImGui::Begin("Task list", &m_Visible,
                       ImGuiWindowFlags_AlwaysAutoResize |
                           ImGuiWindowFlags_MenuBar)) {
+      ImGui::End();
+      return;
+    }
+    if (m_IsLoadingTasks) {
+      ImGui::Text("Loading task...");
       ImGui::End();
       return;
     }
@@ -104,6 +111,8 @@ private:
   ImGuiTextFilter m_TextFilter{};
   std::string m_TaskGroupNewName{};
   bool& m_Visible;
+  bool& m_IsLoadingTasks;
+  bool& m_IsSavingTasks;
   bool m_OpenAddGroupPopup{false};
 
   void ShowAddGroupPopup() {
@@ -129,4 +138,4 @@ private:
     }
   }
 };
-}
+} // namespace TaskManagement

@@ -36,9 +36,8 @@ public:
       // write to temp
       writeFn(writer);
       // -> flush to OS
-      if (!writer.Flush()) {
-        throw std::runtime_error("Error flushing task data to temp file !\n");
-      }
+      // when Core::FileStreamWriter is destroyed, it automatically flush +
+      // close stream so we don't need to do anything here
     }
     // -> rename / replace temp to path (we need to close the stream first)
     std::filesystem::rename(tempName, path);

@@ -17,9 +17,9 @@ public:
               bool& isLoading)
       : m_Reader{path}, m_Data{data}, m_IsLoading{isLoading} {}
   void Execute() override {
-    m_IsLoading = false;
-    m_Reader.ReadArray(m_Data);
     m_IsLoading = true;
+    m_Reader.ReadArray(m_Data);
+    m_IsLoading = false;
   }
 };
 } // namespace TaskManagement

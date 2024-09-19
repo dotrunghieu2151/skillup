@@ -1,5 +1,6 @@
 #pragma once
 
+#include <imgui.h>
 #include <memory>
 #include <string>
 #include <thread>
@@ -17,6 +18,7 @@
 namespace TaskManagement {
 class TaskLayer : public Core::ApplicationLayer {
 private:
+  bool hasFirstLoaded{false};
   bool isLoadingTasks{false};
   bool isSavingTasks{false};
   bool open{false};
@@ -24,27 +26,13 @@ private:
   Core::SpscQueue<std::unique_ptr<Core::Job>, 1> m_JobQueue{};
 
   void ProcessJob() {
-    std::unique_ptr<Core::Job> j{nullptr};
-    while (!m_JobQueue.Pop(j)) {
-      std::this_thread::yield();
+    while (true) {
+      std::unique_ptr<Core::Job> j{nullptr};
+      while (!m_JobQueue.Pop(j)) {
+        std::this_thread::yield();
+      }
+      j->Execute();
     }
-    j->Execute();
-  }
-
-  void TriggerLoadTasks() {
-    while (!m_JobQueue.Push(
-        std::make_unique<LoadTaskJob>("tasks.bin", m, isLoadingTasks))) {
-      std::this_thread::yield();
-    }
-    return;
-  }
-
-  void TriggerSaveTasks() {
-    while (!m_JobQueue.Push(
-        std::make_unique<SaveTaskJob>("tasks.bin", m, isSavingTasks))) {
-      std::this_thread::yield();
-    }
-    return;
   }
 
 public:
@@ -52,14 +40,46 @@ public:
   std::shared_ptr<TaskGroupListUIComponent> taskGroupListUIComponent;
   TaskLayer()
       : taskGroupListUIComponent{std::make_shared<TaskGroupListUIComponent>(
-            open, m)},
+            open, m, isLoadingTasks, isSavingTasks)},
         worker(&TaskLayer::ProcessJob, this) {}
 
   void OnAttach() override {}
 
+  void OnUpdate(float deltaTime) override {
+    if (!isLoadingTasks && hasFirstLoaded && m_JobQueue.IsEmpty()) {
+      m_JobQueue.Push(
+          std::make_unique<SaveTaskJob>("tasks.bin", m, isSavingTasks));
+    }
+  }
+
   void OnUIRender() override {
     if (open) {
+      if (!hasFirstLoaded) {
+        m_JobQueue.Push(
+            std::make_unique<LoadTaskJob>("tasks.bin", m, isLoadingTasks));
+        hasFirstLoaded = true;
+        isLoadingTasks = true;
+      }
       taskGroupListUIComponent->Render();
+
+      if (isSavingTasks) {
+        ImVec2 vpSize = ImGui::GetMainViewport()->Size;
+        ImGui::SetNextWindowPos(ImVec2(vpSize.x - 10.0f, vpSize.y + 40.0f),
+                                ImGuiCond_Always, ImVec2(1.0f, 1.0f));
+        ImGui::Begin("Notification", NULL,
+                     ImGuiWindowFlags_AlwaysAutoResize |
+                         ImGuiWindowFlags_NoDecoration |
+                         ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
+                         ImGuiWindowFlags_NoBringToFrontOnFocus |
+                         ImGuiWindowFlags_NoFocusOnAppearing);
+
+        // We want to support multi-line text, this will
+        // wrap the text after 1/3 of the screen width
+        ImGui::PushTextWrapPos(vpSize.x / 3.f);
+        ImGui::Text("Saving in progress...");
+        ImGui::PopTextWrapPos();
+        ImGui::End();
+      }
     }
   }
 
@@ -76,8 +96,9 @@ public:
   }
 
   void SaveTaskList() {
-    Core::FileStreamWriter fWriter{"task.bin"};
-    fWriter.WriteArray(m);
+    Core::FileStreamWriter::AtomicWrite(
+        "tasks.bin",
+        [this](Core::FileStreamWriter& writer) { writer.WriteArray(m); });
   }
 };
 } // namespace TaskManagement
