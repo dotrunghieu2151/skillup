@@ -6,6 +6,8 @@
 
 #include <filesystem>
 #include <fstream>
+#include <functional>
+#include <string>
 
 namespace Core {
 //==============================================================================
@@ -20,6 +22,30 @@ public:
   uint64_t GetStreamPosition() final { return m_Stream.tellp(); }
   void SetStreamPosition(uint64_t position) final { m_Stream.seekp(position); }
   bool WriteData(const char* data, uint32_t size) final;
+  bool Flush() {
+    m_Stream.flush();
+    return m_Stream.fail();
+  }
+
+  static void AtomicWrite(const std::string& path,
+                          std::function<void(FileStreamWriter&)> writeFn) {
+    std::string tempName{"temp_" + path};
+    {
+      Core::FileStreamWriter writer{tempName};
+      // atomic write to file:
+      // write to temp
+      writeFn(writer);
+      // -> flush to OS
+      if (!writer.Flush()) {
+        throw std::runtime_error("Error flushing task data to temp file !\n");
+      }
+    }
+    // -> rename / replace temp to path (we need to close the stream first)
+    std::filesystem::rename(tempName, path);
+    // -> delete temp
+    // std::filesystem::rename auto deletes the new file if it exists/ the old
+    // file is renamed to the new file so we don't need to do anything here
+  }
 
 private:
   std::filesystem::path m_Path;
