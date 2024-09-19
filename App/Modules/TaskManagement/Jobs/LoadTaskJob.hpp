@@ -18,7 +18,9 @@ public:
       : m_Reader{path}, m_Data{data}, m_IsLoading{isLoading} {}
   void Execute() override {
     m_IsLoading = true;
-    m_Reader.ReadArray(m_Data);
+    if (m_Reader.IsStreamGood()) {
+      m_Reader.ReadArray(m_Data);
+    }
     m_IsLoading = false;
   }
 };

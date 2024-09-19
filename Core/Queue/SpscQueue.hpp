@@ -35,7 +35,7 @@ public:
     const auto currentTail = _tail.load(std::memory_order_relaxed);
     const auto nextTail = Increment(currentTail);
     if (ToIndex(nextTail) != ToIndex(_head.load(std::memory_order_acquire))) {
-      _array[ToIndex(currentTail)] = item;
+      new (_array + ToIndex(currentTail)) Element{item};
       _tail.store(nextTail, std::memory_order_release);
       return true;
     }
@@ -47,7 +47,7 @@ public:
     const auto currentTail = _tail.load(std::memory_order_relaxed);
     const auto nextTail = Increment(currentTail);
     if (ToIndex(nextTail) != ToIndex(_head.load(std::memory_order_acquire))) {
-      _array[ToIndex(currentTail)] = std::move(item);
+      new (_array + ToIndex(currentTail)) Element{std::move(item)};
       _tail.store(nextTail, std::memory_order_release);
       return true;
     }
