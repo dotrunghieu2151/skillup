@@ -22,16 +22,17 @@ private:
   bool isLoadingTasks{false};
   bool isSavingTasks{false};
   bool open{false};
-  std::jthread worker;
   Core::SpscQueue<std::unique_ptr<Core::Job>, 1> m_JobQueue{};
+  std::jthread worker;
 
-  void ProcessJob() {
-    while (true) {
-      std::unique_ptr<Core::Job> j{nullptr};
-      while (!m_JobQueue.Pop(j)) {
+  void ProcessJob(std::stop_token s) {
+    std::unique_ptr<Core::Job> j{nullptr};
+    while (!s.stop_requested()) {
+      if (m_JobQueue.Pop(j)) {
+        j->Execute();
+      } else {
         std::this_thread::yield();
       }
-      j->Execute();
     }
   }
 
@@ -41,12 +42,12 @@ public:
   TaskLayer()
       : taskGroupListUIComponent{std::make_shared<TaskGroupListUIComponent>(
             open, m, isLoadingTasks, isSavingTasks)},
-        worker(&TaskLayer::ProcessJob, this) {}
+        worker([this](std::stop_token s) { ProcessJob(s); }) {}
 
   void OnAttach() override {}
 
   void OnUpdate(float deltaTime) override {
-    if (!isLoadingTasks && hasFirstLoaded && m_JobQueue.IsEmpty()) {
+    if (open && !isLoadingTasks && hasFirstLoaded && m_JobQueue.IsEmpty()) {
       m_JobQueue.Push(
           std::make_unique<SaveTaskJob>("tasks.bin", m, isSavingTasks));
     }
