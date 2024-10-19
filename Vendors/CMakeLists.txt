@@ -4,6 +4,7 @@ target_sources(Vendors
   PRIVATE
     stbImage/stb_image.cpp
     imguistdlib/imgui_stdlib.cpp
+    imguiPlot/imgui_plot.cpp
 )
 
 target_link_libraries(Vendors PUBLIC imgui::imgui)

@@ -21,7 +21,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
 project(skillup VERSION 0.1.0 LANGUAGES CXX)
 
 option (BUILD_TESTS "Override building of tests" ON)
-option (MEMORY_DEBUG "Override enabling memory debug" ON)
+option (MEMORY_DEBUG "Override enabling memory debug" ON) 
 
 # if (MEMORY_DEBUG)
 #   set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
@@ -37,6 +37,7 @@ find_package(GLEW CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
+find_package(portaudio CONFIG REQUIRED)
 
 
 # Include dir

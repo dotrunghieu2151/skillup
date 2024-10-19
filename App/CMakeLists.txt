@@ -8,6 +8,10 @@ add_subdirectory(Modules/TaskManagement)
 
 target_link_libraries(skillup PRIVATE TaskManagement)
 
+add_subdirectory(Modules/Transcribe)
+
+target_link_libraries(skillup PRIVATE Transcribe)
+
 
 # sym link assets
 set (assetSource "${CMAKE_SOURCE_DIR}/Assets")

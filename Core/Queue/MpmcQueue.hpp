@@ -152,6 +152,8 @@ public:
 
   inline bool IsEmpty() const { return GetSize() == 0; }
 
+  inline bool IsFull() const { return GetSize() == Size; }
+
 private:
   inline size_t Increment(size_t idx) const { return idx + 1; }
   inline size_t ToIndex(size_t readOrWriteSequence) const {

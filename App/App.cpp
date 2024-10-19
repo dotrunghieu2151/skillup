@@ -5,6 +5,7 @@
 #include "Core/Application.hpp"
 #include "MainMenuLayer.hpp"
 #include "Modules/TaskManagement/TaskLayer.hpp"
+#include "Modules/Transcribe/TranscribeLayer.hpp"
 
 int main(void) {
   Core::ApplicationSpecification spec{};
@@ -12,6 +13,7 @@ int main(void) {
 
   app->PushLayer<MainMenuLayer>();
   app->PushLayer<TaskManagement::TaskLayer>();
+  app->PushLayer<Transcribe::TranscribeLayer>();
 
   app->Run();
   delete app;

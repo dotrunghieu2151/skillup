@@ -18,7 +18,7 @@ concept IsEvent = requires(C c) { []<typename X>(Event<X>&) {}(c); };
 
 template <IsEvent EventType> class EventEmitter {
 public:
-  using FunctionType = std::shared_ptr<std::function<void(const EventType&)>>;
+  using FunctionType = std::function<void(const EventType&)>;
 
   void operator+=(FunctionType callback) { m_Listeners.push_back(callback); }
 
@@ -33,7 +33,7 @@ public:
 
   void Trigger(const EventType& event) const {
     for (auto cbSharedPtr : m_Listeners) {
-      (*cbSharedPtr)(event);
+      cbSharedPtr(event);
     }
   };
 

@@ -25,6 +25,10 @@
     {
       "name": "fmt",
       "version>=": "11.0.2#0"
+    },
+    {
+      "name": "portaudio",
+      "version>=": "19.7#5"
     }
   ]
 }
