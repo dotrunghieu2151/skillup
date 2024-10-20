@@ -30,8 +30,16 @@ public:
 
   struct PauseRecordEvent : Core::EventSystem::Event<TranscribeUIComponent> {};
 
+  struct PlaybackEvent : Core::EventSystem::Event<TranscribeUIComponent> {
+    int outputDeviceID;
+  };
+
   inline Core::EventSystem::EventEmitter<RecordEvent>& OnRecordEvent() {
     return m_OnRecordEvent;
+  }
+
+  inline Core::EventSystem::EventEmitter<PlaybackEvent>& OnPlaybackEvent() {
+    return m_OnPlaybackEvent;
   }
 
   inline Core::EventSystem::EventEmitter<StopRecordEvent>& OnStopRecordEvent() {
@@ -97,6 +105,7 @@ public:
 
       if (selectedOutput > -1 && m_SampleSize) {
         if (ImGui::Button("Playback")) {
+          m_OnPlaybackEvent.Trigger(PlaybackEvent{*this, selectedOutput});
         }
       }
     }
@@ -107,8 +116,8 @@ public:
       conf.values.count = m_SampleSize;
       conf.tooltip.show = true;
       conf.tooltip.format = "x=%.2f, y=%.2f";
-      conf.scale.min = -1;
-      conf.scale.max = 10;
+      conf.scale.min = -0.1;
+      conf.scale.max = 0.1;
       conf.grid_x.show = true;
       conf.grid_y.show = true;
       conf.frame_size = ImVec2(400, 400);
@@ -122,6 +131,7 @@ public:
 
 private:
   Core::EventSystem::EventEmitter<RecordEvent> m_OnRecordEvent{};
+  Core::EventSystem::EventEmitter<PlaybackEvent> m_OnPlaybackEvent{};
   Core::EventSystem::EventEmitter<StopRecordEvent> m_OnStopRecordEvent{};
   Core::EventSystem::EventEmitter<PauseRecordEvent> m_OnPauseRecordEvent{};
   float*& m_Samples;

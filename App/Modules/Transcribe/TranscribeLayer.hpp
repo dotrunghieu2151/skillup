@@ -18,6 +18,7 @@ class TranscribeLayer : public Core::ApplicationLayer {
 private:
   using StreamConfig = AudioController::StreamSampleFloat32Config;
   using RecordStreamT = RecordStream<StreamConfig>;
+  using PlaybackStreamT = PlaybackStream<StreamConfig>;
   using BufferT = RecordStreamT::Buffer;
 
   bool isRecording{false};
@@ -31,6 +32,7 @@ private:
   std::vector<AudioController::DeviceInfo> inputDevices{};
   std::vector<AudioController::DeviceInfo> outputDevices{};
   std::unique_ptr<RecordStreamT> recordStream{nullptr};
+  std::unique_ptr<PlaybackStreamT> playbackStream{nullptr};
 
 public:
   std::shared_ptr<TranscribeUIComponent> transcribeUIComponent;
@@ -48,13 +50,30 @@ public:
         [this](const TranscribeUIComponent::RecordEvent& event) {
           recordStream = controller.Record<StreamConfig>(event.inputDeviceID);
         };
+    transcribeUIComponent->OnPlaybackEvent() +=
+        [this](const TranscribeUIComponent::PlaybackEvent& event) {
+          playbackStream = controller.Playback<StreamConfig>(
+              event.outputDeviceID, recordAudioData);
+        };
     transcribeUIComponent->OnPauseRecordEvent() +=
         [this](const TranscribeUIComponent::PauseRecordEvent& event) {
-          recordStream->Pause();
+          if (recordStream) {
+            recordStream->Pause();
+          }
+
+          if (playbackStream) {
+            playbackStream->Pause();
+          }
         };
     transcribeUIComponent->OnStopRecordEvent() +=
         [this](const TranscribeUIComponent::StopRecordEvent& event) {
-          recordStream->Stop();
+          if (recordStream) {
+            recordStream->Stop();
+          }
+
+          if (playbackStream) {
+            playbackStream->Stop();
+          }
         };
   }
 
@@ -82,6 +101,13 @@ public:
       }
     } else {
       isRecording = false;
+    }
+    if (playbackStream) {
+      if (playbackStream->IsPlaying()) {
+        isPlayingBack = true;
+      } else if (playbackStream->IsStopped()) {
+        isPlayingBack = false;
+      }
     }
   }
 

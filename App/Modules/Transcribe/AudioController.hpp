@@ -9,6 +9,7 @@
 
 #include <portaudio.h>
 
+#include "Entities/PlaybackStream.hpp"
 #include "Entities/RecordStream.hpp"
 
 namespace Transcribe {
@@ -96,7 +97,7 @@ public:
     double latency;
   };
   struct Config {
-    int sampleRate{44100};
+    int sampleRate{48000};
     int framesPerBuffer{1024};
     int numOfChannels{2};
   };
@@ -130,8 +131,7 @@ public:
     for (int i = 0; i < numDevices; ++i) {
       deviceInfo = Pa_GetDeviceInfo(i);
       bool isWasapi = Pa_GetHostApiInfo(deviceInfo->hostApi)->type == paWASAPI;
-      if (isWasapi && deviceInfo->maxInputChannels == m_Config.numOfChannels &&
-          deviceInfo->defaultSampleRate >= (double)m_Config.sampleRate) {
+      if (isWasapi && deviceInfo->maxInputChannels == m_Config.numOfChannels) {
         v.push_back({deviceInfo->name, i, deviceInfo->defaultLowInputLatency});
       }
     }
@@ -161,8 +161,7 @@ public:
     for (int i = 0; i < numDevices; ++i) {
       deviceInfo = Pa_GetDeviceInfo(i);
       bool isWasapi = Pa_GetHostApiInfo(deviceInfo->hostApi)->type == paWASAPI;
-      if (isWasapi && deviceInfo->maxOutputChannels == m_Config.numOfChannels &&
-          deviceInfo->defaultSampleRate >= (double)m_Config.sampleRate) {
+      if (isWasapi && deviceInfo->maxOutputChannels == m_Config.numOfChannels) {
         v.push_back({deviceInfo->name, i, deviceInfo->defaultLowInputLatency});
       }
     }
@@ -186,6 +185,20 @@ public:
         m_Config.numOfChannels * m_Config.framesPerBuffer * 4,
         StreamConfigT{inputDeviceID, m_Config.numOfChannels,
                       m_Config.framesPerBuffer, m_Config.sampleRate}}};
+    stream->Start();
+
+    return std::unique_ptr<Stream>(stream);
+  }
+
+  template <typename StreamConfigT>
+  std::unique_ptr<typename PlaybackStream<StreamConfigT>>
+  Playback(int outputDeviceID,
+           std::vector<typename StreamConfigT::Sample>& data) {
+    using Stream = PlaybackStream<StreamConfigT>;
+
+    Stream* stream{new Stream{
+        data, StreamConfigT{outputDeviceID, m_Config.numOfChannels,
+                            m_Config.framesPerBuffer, m_Config.sampleRate}}};
     stream->Start();
 
     return std::unique_ptr<Stream>(stream);
