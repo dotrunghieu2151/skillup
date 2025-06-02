@@ -8,6 +8,7 @@
 #include <thread>
 #include <vector>
 
+#include <soxr.h>
 #include <whisper.h>
 
 #include "AudioController.hpp"
@@ -78,6 +79,10 @@ public:
   std::string GetModelInfo() const;
   std::vector<std::string> GetSupportedLanguages() const;
 
+  // Fallback simple resampling method
+  std::vector<float> ResampleAudio(const float* samples, int sample_count,
+                                   int input_rate, int output_rate);
+
 private:
   struct AudioSegment {
     std::vector<float> samples;
@@ -105,8 +110,11 @@ private:
   void SetupParams();
   void ProcessingLoop();
   TranscriptionResult ProcessSegment(const AudioSegment& segment);
-  std::vector<float> ResampleAudio(const float* samples, int sample_count,
-                                   int input_rate, int output_rate);
+
+  // High-quality resampling using SoX Resampler
+  std::vector<float> ResampleAudioSoXR(const float* samples, int sample_count,
+                                       int input_rate, int output_rate);
+
   bool IsValidAudioSegment(const std::vector<float>& samples);
 
   // VAD (Voice Activity Detection) helpers

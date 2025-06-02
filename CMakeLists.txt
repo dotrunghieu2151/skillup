@@ -39,7 +39,21 @@ find_package(glm CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(portaudio CONFIG REQUIRED)
 
+# soxr doesn't provide CMake config files, so we set it up manually
+find_path(SOXR_INCLUDE_DIR soxr.h)
+find_library(SOXR_LIBRARY NAMES soxr)
 
+if(SOXR_INCLUDE_DIR AND SOXR_LIBRARY)
+    # Create an imported target for soxr
+    add_library(soxr::soxr UNKNOWN IMPORTED)
+    set_target_properties(soxr::soxr PROPERTIES
+        IMPORTED_LOCATION "${SOXR_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${SOXR_INCLUDE_DIR}"
+    )
+    message(STATUS "Found SoXR: ${SOXR_LIBRARY}")
+else()
+    message(FATAL_ERROR "Could not find SoXR library. Make sure it's installed via vcpkg.")
+endif()
 
 # Include dir
 include_directories(${CMAKE_CURRENT_LIST_DIR})

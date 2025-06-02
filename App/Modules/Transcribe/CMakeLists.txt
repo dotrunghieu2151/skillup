@@ -8,4 +8,11 @@ target_sources(Transcribe
 
 target_include_directories(Transcribe PUBLIC ${CMAKE_CURRENT_LIST_DIR})
 
-target_link_libraries(Transcribe PUBLIC Core whisper)
+# Link required libraries
+target_link_libraries(Transcribe 
+  PUBLIC 
+    Core
+    whisper
+    soxr::soxr
+    portaudio
+)

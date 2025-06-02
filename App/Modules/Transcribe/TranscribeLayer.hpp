@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <functional>
@@ -39,9 +41,6 @@ private:
 
   // Whisper transcription
   std::unique_ptr<WhisperTranscriber> whisperTranscriber{nullptr};
-  std::unique_ptr<WhisperTranscriber> translationTranscriber{nullptr};
-  std::vector<TranscriptionResult> transcriptionResults{};
-  std::vector<TranscriptionResult> translationResults{};
   bool isTranscribing{false};
   bool autoStartTranscription{true};
   bool recordingWithTranscription{
@@ -49,9 +48,13 @@ private:
   std::string currentJapaneseTranscription{};
   std::string currentEnglishTranslation{};
 
-  // Audio context for better transcription
-  std::vector<float> audioContext{};
-  std::vector<float> translationAudioBuffer{};
+  // Loading popup state
+  bool showLoadingPopup{false};
+  std::string loadingModelPath{};
+  std::thread modelLoadingThread;
+  std::atomic<bool> modelLoadingComplete{false};
+  std::atomic<bool> modelLoadingSuccess{false};
+
   static constexpr size_t MAX_CONTEXT_SAMPLES =
       48000 * 10; // 10 seconds at 48kHz
 
@@ -63,12 +66,18 @@ public:
         inputDevices{controller.GetInputDevices()},
         outputDevices{controller.GetOutputDevices()},
         whisperTranscriber{CreateWhisperTranscriber()},
-        translationTranscriber{CreateTranslationTranscriber()},
         transcribeUIComponent{std::make_shared<TranscribeUIComponent>(
             open, recordAudioDataPtr, recordAudioDataSize, inputDevices,
             outputDevices, isRecording, isPlayingBack,
             currentJapaneseTranscription, currentEnglishTranslation,
             isTranscribing, autoStartTranscription)} {}
+
+  ~TranscribeLayer() {
+    // Clean up model loading thread
+    if (modelLoadingThread.joinable()) {
+      modelLoadingThread.join();
+    }
+  }
 
   void OnAttach() override {
     transcribeUIComponent->OnRecordEvent() +=
@@ -106,32 +115,61 @@ public:
         [this](const TranscribeUIComponent::SaveAudioEvent& event) {
           SaveAudioToFile(event.filename);
         };
+    transcribeUIComponent->OnStartTranscriptionEvent() +=
+        [this](const TranscribeUIComponent::StartTranscriptionEvent& event) {
+          if (!isTranscribing && !showLoadingPopup) {
+            StartTranscription();
+          }
+        };
   }
 
   void OnUpdate(float deltaTime) override {
+    // Check if model loading is complete
+    if (modelLoadingComplete.load()) {
+      showLoadingPopup = false;
+      isTranscribing = modelLoadingSuccess.load();
+      modelLoadingComplete.store(false); // Reset for next time
+
+      if (modelLoadingThread.joinable()) {
+        modelLoadingThread.join();
+      }
+    }
+
     if (recordStream) {
       if (recordStream->IsRecording()) {
         isRecording = true;
         const BufferT& recordBuffer = recordStream->Read();
         if (recordBuffer.size) {
           // Store audio data for playback
-          recordAudioData.reserve(recordAudioData.capacity() +
-                                  recordBuffer.size);
-          int start = recordAudioData.size();
-          for (int i{}; i < recordBuffer.size; ++i) {
-            recordAudioData.push_back(recordBuffer.buffer[i]);
+          int start{};
+          if (recordingWithTranscription) {
+            std::vector<float> resampled = whisperTranscriber->ResampleAudio(
+                recordBuffer.buffer, recordBuffer.size, 48000, 16000);
+            recordAudioData.reserve(recordAudioData.capacity() +
+                                    resampled.size());
+            start = recordAudioData.size();
+            for (int i{}; i < resampled.size(); ++i) {
+              recordAudioData.push_back(resampled[i]);
+            }
+          } else {
+            recordAudioData.reserve(recordAudioData.capacity() +
+                                    recordBuffer.size);
+            start = recordAudioData.size();
+            for (int i{}; i < recordBuffer.size; ++i) {
+              recordAudioData.push_back(recordBuffer.buffer[i]);
+            }
           }
+
           recordAudioDataPtr = &recordAudioData[start];
           recordAudioDataSize = static_cast<int>(recordBuffer.size);
 
           // Only process for transcription if recording with transcription
           // enabled
           if (recordingWithTranscription) {
-            // Add to audio context for transcription
-            AddToAudioContext(recordBuffer.buffer, recordBuffer.size);
 
             // Auto-start transcription if enabled and not already running
-            if (autoStartTranscription && !isTranscribing) {
+            if (autoStartTranscription && !isTranscribing &&
+                !showLoadingPopup) {
               StartTranscription();
             }
 
@@ -163,6 +201,43 @@ public:
     if (open) {
       transcribeUIComponent->Render();
     }
+
+    // Render loading popup
+    if (showLoadingPopup) {
+      // Center the popup
+      ImGuiViewport* viewport = ImGui::GetMainViewport();
+      ImVec2 center = viewport->GetCenter();
+      ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+      ImGui::SetNextWindowSize(ImVec2(400, 150), ImGuiCond_Always);
+
+      if (ImGui::BeginPopupModal("Loading Whisper Model", nullptr,
+                                 ImGuiWindowFlags_NoResize |
+                                     ImGuiWindowFlags_NoMove |
+                                     ImGuiWindowFlags_NoCollapse)) {
+
+        // Loading animation - spinning dots
+        static float loadingTime = 0.0f;
+        loadingTime += ImGui::GetIO().DeltaTime;
+
+        ImGui::Text("Loading model...");
+        ImGui::Text("Model: %s", loadingModelPath.c_str());
+        ImGui::Separator();
+
+        // Simple loading animation
+        const char* loadingChars = "|/-\\";
+        char loadingChar = loadingChars[(int)(loadingTime * 4) % 4];
+        ImGui::Text("Please wait %c", loadingChar);
+
+        // Progress bar (indeterminate)
+        float progress = fmod(loadingTime * 0.5f, 1.0f);
+        ImGui::ProgressBar(progress, ImVec2(-1, 0), "");
+
+        ImGui::EndPopup();
+      } else {
+        // Open the popup if it's not already open
+        ImGui::OpenPopup("Loading Whisper Model");
+      }
+    }
   }
 
   void Toggle() { open = !open; }
@@ -170,11 +245,10 @@ public:
 private:
   std::unique_ptr<WhisperTranscriber> CreateWhisperTranscriber() {
     WhisperTranscriber::Config config;
-    config.model_path =
-        "models/ggml-large-v3-turbo-q8_0.bin"; // Large turbo model for better
-                                               // Japanese
-    config.language = "ja";                    // Japanese input
-    config.translate_to_english = false;       // We want original Japanese
+    config.model_path = "models/ggml-small.en.bin"; // Large turbo model for
+                                                    // better Japanese
+    config.language = "en";                         // Japanese input
+    config.translate_to_english = false;            // We want original Japanese
     config.use_gpu = true;
     config.n_threads = 4;
     config.vad_threshold = 0.5f; // Lower threshold for Japanese speech patterns
@@ -184,97 +258,50 @@ private:
     return std::make_unique<WhisperTranscriber>(config);
   }
 
-  std::unique_ptr<WhisperTranscriber> CreateTranslationTranscriber() {
-    WhisperTranscriber::Config config;
-    config.model_path =
-        "models/ggml-large-v3-turbo-q8_0.bin"; // Large turbo model for better
-                                               // Japanese
-    config.language = "ja";                    // Japanese input
-    config.translate_to_english = true;        // Translate Japanese to English
-    config.use_gpu = true;
-    config.n_threads = 2;        // Use fewer threads for translation
-    config.vad_threshold = 0.5f; // Lower threshold for Japanese
-    config.segment_length_ms =
-        4000;                // Longer segments for better Japanese processing
-    config.overlap_ms = 750; // More overlap for Japanese context
-
-    return std::make_unique<WhisperTranscriber>(config);
-  }
-
-  void AddToAudioContext(const float* samples, int sampleCount) {
-    // Add new samples to context buffer
-    for (int i = 0; i < sampleCount; ++i) {
-      audioContext.push_back(samples[i]);
-    }
-
-    // Keep only the last MAX_CONTEXT_SAMPLES
-    if (audioContext.size() > MAX_CONTEXT_SAMPLES) {
-      audioContext.erase(audioContext.begin(),
-                         audioContext.begin() +
-                             (audioContext.size() - MAX_CONTEXT_SAMPLES));
-    }
-  }
-
 public:
   // Whisper transcription methods
   bool StartTranscription() {
-    if (!whisperTranscriber->Initialize()) {
-      return false;
+    // Show loading popup with model path
+    loadingModelPath = whisperTranscriber
+                           ? "models/ggml-large-v3-turbo-q8_0.bin"
+                           : "Unknown model";
+    showLoadingPopup = true;
+    modelLoadingComplete.store(false);
+    modelLoadingSuccess.store(false);
+
+    // Start model loading in background thread
+    if (modelLoadingThread.joinable()) {
+      modelLoadingThread.join(); // Wait for any previous loading to complete
     }
 
-    if (!translationTranscriber->Initialize()) {
-      return false;
-    }
+    modelLoadingThread = std::thread([this]() {
+      bool success = false;
+      if (whisperTranscriber) {
+        success = whisperTranscriber->Initialize();
 
-    // Start main transcription
-    bool transcriptionStarted = whisperTranscriber->StartRealTimeTranscription(
-        [this](const TranscriptionResult& result) {
-          transcriptionResults.push_back(result);
+        if (success) {
+          // Start real-time transcription
+          success = whisperTranscriber->StartRealTimeTranscription(
+              [this](const TranscriptionResult& result) {
+                // Update current English translation
+                if (!result.text.empty()) {
+                  currentEnglishTranslation += "\n" + result.text;
+                }
+              });
+        }
+      }
 
-          // Update current Japanese transcription
-          if (!result.text.empty()) {
-            currentJapaneseTranscription = result.text;
+      modelLoadingSuccess.store(success);
+      modelLoadingComplete.store(true);
+    });
 
-            // Process same audio for translation
-            if (!translationAudioBuffer.empty()) {
-              ProcessAudioForTranslation(translationAudioBuffer.data(),
-                                         translationAudioBuffer.size());
-            }
-          }
-
-          // Keep only last 50 results to prevent memory growth
-          if (transcriptionResults.size() > 50) {
-            transcriptionResults.erase(transcriptionResults.begin());
-          }
-        });
-
-    // Start translation transcription
-    bool translationStarted =
-        translationTranscriber->StartRealTimeTranscription(
-            [this](const TranscriptionResult& result) {
-              translationResults.push_back(result);
-
-              // Update current English translation
-              if (!result.text.empty()) {
-                currentEnglishTranslation = result.text;
-              }
-
-              // Keep only last 50 results to prevent memory growth
-              if (translationResults.size() > 50) {
-                translationResults.erase(translationResults.begin());
-              }
-            });
-
-    isTranscribing = transcriptionStarted && translationStarted;
-    return isTranscribing;
+    return true; // Return immediately, actual result will be checked when
+                 // loading completes
   }
 
   void StopTranscription() {
     if (whisperTranscriber) {
       whisperTranscriber->StopRealTimeTranscription();
-    }
-    if (translationTranscriber) {
-      translationTranscriber->StopRealTimeTranscription();
     }
     isTranscribing = false;
   }
@@ -282,15 +309,6 @@ public:
   void ProcessAudioForTranscription(const float* samples, int sampleCount) {
     if (isTranscribing && whisperTranscriber) {
       whisperTranscriber->ProcessAudioBuffer(samples, sampleCount, 48000);
-
-      // Store audio for translation processing
-      translationAudioBuffer.assign(samples, samples + sampleCount);
-    }
-  }
-
-  void ProcessAudioForTranslation(const float* samples, int sampleCount) {
-    if (isTranscribing && translationTranscriber) {
-      translationTranscriber->ProcessAudioBuffer(samples, sampleCount, 48000);
     }
   }
 
@@ -299,10 +317,6 @@ public:
     if (!autoStartTranscription && isTranscribing) {
       StopTranscription();
     }
-  }
-
-  const std::vector<TranscriptionResult>& GetTranscriptionResults() const {
-    return transcriptionResults;
   }
 
   // Audio file saving functionality
@@ -361,12 +375,7 @@ public:
   // Clear recording data (useful for starting fresh)
   void ClearRecording() {
     recordAudioData.clear();
-    audioContext.clear();
-    translationAudioBuffer.clear();
-    currentJapaneseTranscription.clear();
     currentEnglishTranslation.clear();
-    transcriptionResults.clear();
-    translationResults.clear();
   }
 };
 } // namespace Transcribe

@@ -159,7 +159,7 @@ void WhisperTranscriber::ProcessingLoop() {
 
   while (!m_ShouldStop.load()) {
     if (!m_HasNewAudio.load()) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      std::this_thread::yield();
       continue;
     }
 
@@ -204,7 +204,7 @@ void WhisperTranscriber::ProcessingLoop() {
       }
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    std::this_thread::yield();
   }
 }
 
@@ -301,11 +301,11 @@ TranscriptionResult WhisperTranscriber::TranscribeBuffer(const float* samples,
     }
   }
 
-  // Resample if needed
+  // Resample if needed using high-quality SoX Resampler
   std::vector<float> audio_data;
   if (sample_rate != WHISPER_SAMPLE_RATE) {
-    audio_data =
-        ResampleAudio(samples, sample_count, sample_rate, WHISPER_SAMPLE_RATE);
+    audio_data = ResampleAudioSoXR(samples, sample_count, sample_rate,
+                                   WHISPER_SAMPLE_RATE);
   } else {
     audio_data.assign(samples, samples + sample_count);
   }
@@ -318,6 +318,73 @@ TranscriptionResult WhisperTranscriber::TranscribeBuffer(const float* samples,
   return ProcessSegment(segment);
 }
 
+std::vector<float> WhisperTranscriber::ResampleAudioSoXR(const float* samples,
+                                                         int sample_count,
+                                                         int input_rate,
+                                                         int output_rate) {
+  if (input_rate == output_rate) {
+    return std::vector<float>(samples, samples + sample_count);
+  }
+
+  // Calculate output sample count
+  double ratio = static_cast<double>(output_rate) / input_rate;
+  size_t output_count = static_cast<size_t>(sample_count * ratio + 0.5);
+
+  std::vector<float> output(output_count);
+
+  // SoX Resampler error handling
+  soxr_error_t error = nullptr;
+
+  // Create SoX Resampler instance with high quality settings
+  soxr_io_spec_t io_spec = soxr_io_spec(SOXR_FLOAT32_I, SOXR_FLOAT32_I);
+
+  // Use high quality configuration for polyphase downsampling
+  soxr_quality_spec_t quality_spec = soxr_quality_spec(SOXR_HQ, 0);
+
+  // Runtime spec - no specific requirements
+  soxr_runtime_spec_t runtime_spec =
+      soxr_runtime_spec(1); // Single-threaded for simplicity
+
+  // Create the resampler
+  soxr_t resampler =
+      soxr_create(input_rate, output_rate, 2, // 2 channels (stereo)
+                  &error, &io_spec, &quality_spec, &runtime_spec);
+
+  if (error) {
+    std::cerr << "SoX Resampler creation failed: " << soxr_strerror(error)
+              << std::endl;
+    // Fallback to simple linear interpolation
+    return ResampleAudio(samples, sample_count, input_rate, output_rate);
+  }
+
+  // Perform the resampling
+  size_t input_used = 0;
+  size_t output_generated = 0;
+
+  error = soxr_process(resampler, samples, sample_count, &input_used,
+                       output.data(), output_count, &output_generated);
+
+  if (error) {
+    std::cerr << "SoX Resampler processing failed: " << soxr_strerror(error)
+              << std::endl;
+    soxr_delete(resampler);
+    // Fallback to simple linear interpolation
+    return ResampleAudio(samples, sample_count, input_rate, output_rate);
+  }
+
+  // Clean up
+  soxr_delete(resampler);
+
+  // Resize output vector to actual generated samples
+  output.resize(output_generated);
+
+  std::cout << "SoX Resampler: " << sample_count << " samples @ " << input_rate
+            << "Hz -> " << output_generated << " samples @ " << output_rate
+            << "Hz" << std::endl;
+
+  return output;
+}
+
 std::vector<float> WhisperTranscriber::ResampleAudio(const float* samples,
                                                      int sample_count,
                                                      int input_rate,
@@ -326,7 +393,7 @@ std::vector<float> WhisperTranscriber::ResampleAudio(const float* samples,
     return std::vector<float>(samples, samples + sample_count);
   }
 
-  // Simple linear interpolation resampling
+  // Simple linear interpolation resampling (fallback method)
   double ratio = static_cast<double>(output_rate) / input_rate;
   int output_count = static_cast<int>(sample_count * ratio);
 
@@ -346,6 +413,10 @@ std::vector<float> WhisperTranscriber::ResampleAudio(const float* samples,
       output[i] = 0.0f;
     }
   }
+
+  std::cout << "Fallback Linear Resampler: " << sample_count << " samples @ "
+            << input_rate << "Hz -> " << output_count << " samples @ "
+            << output_rate << "Hz" << std::endl;
 
   return output;
 }

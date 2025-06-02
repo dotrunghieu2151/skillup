@@ -39,6 +39,9 @@ public:
     std::string filename;
   };
 
+  struct StartTranscriptionEvent
+      : Core::EventSystem::Event<TranscribeUIComponent> {};
+
   inline Core::EventSystem::EventEmitter<RecordEvent>& OnRecordEvent() {
     return m_OnRecordEvent;
   }
@@ -58,6 +61,11 @@ public:
 
   inline Core::EventSystem::EventEmitter<SaveAudioEvent>& OnSaveAudioEvent() {
     return m_OnSaveAudioEvent;
+  }
+
+  inline Core::EventSystem::EventEmitter<StartTranscriptionEvent>&
+  OnStartTranscriptionEvent() {
+    return m_OnStartTranscriptionEvent;
   }
 
   TranscribeUIComponent(
@@ -95,6 +103,23 @@ public:
         ImGui::Indent();
         ImGui::Checkbox("Auto-start transcription with recording",
                         &m_AutoStartTranscription);
+
+        // Manual transcription control when recording and auto-start is
+        // disabled
+        if (m_IsRecording && !m_AutoStartTranscription) {
+          if (!m_IsTranscribing) {
+            if (ImGui::Button("🤖 Start Transcription")) {
+              m_OnStartTranscriptionEvent.Trigger(
+                  StartTranscriptionEvent{*this});
+            }
+            ImGui::SameLine();
+            ImGui::Text("(Manual start)");
+          } else {
+            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f),
+                               "🤖 Transcription Active");
+          }
+        }
+
         ImGui::Unindent();
       }
 
@@ -267,6 +292,8 @@ private:
   Core::EventSystem::EventEmitter<StopRecordEvent> m_OnStopRecordEvent{};
   Core::EventSystem::EventEmitter<PauseRecordEvent> m_OnPauseRecordEvent{};
   Core::EventSystem::EventEmitter<SaveAudioEvent> m_OnSaveAudioEvent{};
+  Core::EventSystem::EventEmitter<StartTranscriptionEvent>
+      m_OnStartTranscriptionEvent{};
   float*& m_Samples;
   int& m_SampleSize;
   int selectedInput{-1};
