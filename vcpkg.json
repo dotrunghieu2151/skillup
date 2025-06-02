@@ -19,7 +19,11 @@
     },
     {
       "name": "imgui",
-      "features": ["docking-experimental", "glfw-binding", "opengl3-binding"],
+      "features": [
+        "docking-experimental",
+        "glfw-binding",
+        "opengl3-binding"
+      ],
       "version>=": "1.90.7"
     },
     {

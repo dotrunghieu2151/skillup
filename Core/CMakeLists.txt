@@ -23,5 +23,6 @@ target_link_libraries(Core PUBLIC GLEW::GLEW)
 target_link_libraries(Core PUBLIC glm::glm-header-only)
 target_link_libraries(Core PUBLIC fmt::fmt-header-only)
 target_link_libraries(Core PUBLIC portaudio)
+target_link_libraries(Core PUBLIC whisper)
 
 target_link_libraries(Core PUBLIC Vendors)

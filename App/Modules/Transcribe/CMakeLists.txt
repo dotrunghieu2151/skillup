@@ -1,5 +1,11 @@
-add_library(Transcribe INTERFACE)
+add_library(Transcribe STATIC)
 
-target_include_directories(Transcribe INTERFACE ${CMAKE_CURRENT_LIST_DIR})
+target_sources(Transcribe 
+  PRIVATE
+    WhisperTranscriber.cpp
+    AudioFileWriter.hpp
+)
 
-target_link_libraries(Transcribe INTERFACE Core)
+target_include_directories(Transcribe PUBLIC ${CMAKE_CURRENT_LIST_DIR})
+
+target_link_libraries(Transcribe PUBLIC Core whisper)
