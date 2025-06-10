@@ -98,7 +98,7 @@ public:
   };
   struct Config {
     int sampleRate{48000};
-    int framesPerBuffer{1024};
+    int framesPerBuffer{4096};
     int numOfChannels{2};
   };
 

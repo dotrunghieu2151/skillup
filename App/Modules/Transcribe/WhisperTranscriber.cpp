@@ -9,7 +9,12 @@
 namespace Transcribe {
 
 WhisperTranscriber::WhisperTranscriber(const Config& config)
-    : m_Config(config), m_Context(nullptr) {}
+    : m_Config(config), m_Context(nullptr),
+      m_AudioStream(
+          WHISPER_SAMPLE_RATE * config.segment_length_ms / 1000,
+          std::min(WHISPER_SAMPLE_RATE * (config.segment_length_ms / 1000) * 3,
+                   30 * WHISPER_SAMPLE_RATE),
+          "AudioStream") {}
 
 WhisperTranscriber::~WhisperTranscriber() { Shutdown(); }
 
@@ -67,8 +72,9 @@ void WhisperTranscriber::SetupParams() {
   m_Params.translate = m_Config.translate_to_english;
   m_Params.print_progress = false;
   m_Params.print_timestamps = true;
-  m_Params.print_realtime = false;
+  m_Params.print_realtime = true;
   m_Params.print_special = false;
+  m_Params.no_timestamps = false;
 
   // Language setting
   if (m_Config.language != "auto") {
@@ -80,10 +86,8 @@ void WhisperTranscriber::SetupParams() {
 
   // VAD settings
   m_Params.no_speech_thold = m_Config.vad_threshold;
-
-  // Suppress non-speech tokens
-  m_Params.suppress_blank = true;
-  m_Params.suppress_nst = true;
+  m_Params.no_context = true;
+  m_Params.single_segment = true;
 }
 
 bool WhisperTranscriber::StartRealTimeTranscription(
@@ -99,11 +103,10 @@ bool WhisperTranscriber::StartRealTimeTranscription(
   }
 
   m_Callback = callback;
-  m_ShouldStop.store(false);
   m_IsTranscribing.store(true);
 
-  // Start processing thread
-  m_ProcessingThread = std::thread(&WhisperTranscriber::ProcessingLoop, this);
+  transcriptionThread =
+      std::jthread([this](std::stop_token s) { TranscriptionLoop(s); });
 
   return true;
 }
@@ -113,80 +116,47 @@ void WhisperTranscriber::StopRealTimeTranscription() {
     return;
   }
 
-  m_ShouldStop.store(true);
   m_IsTranscribing.store(false);
 
-  if (m_ProcessingThread.joinable()) {
-    m_ProcessingThread.join();
-  }
+  transcriptionThread.request_stop();
 
-  // Clear audio buffer
-  {
-    std::lock_guard<std::mutex> lock(m_BufferMutex);
-    m_AudioBuffer.clear();
-    m_HasNewAudio.store(false);
-  }
+  m_AudioStream.Flush();
 }
 
 void WhisperTranscriber::ProcessAudioBuffer(const float* samples,
                                             int sample_count, int sample_rate) {
-  if (!m_IsTranscribing.load()) {
-    return;
-  }
-
-  std::lock_guard<std::mutex> lock(m_BufferMutex);
-
-  // Resample to 16kHz if needed (Whisper expects 16kHz)
   if (sample_rate != WHISPER_SAMPLE_RATE) {
-    auto resampled =
-        ResampleAudio(samples, sample_count, sample_rate, WHISPER_SAMPLE_RATE);
-    m_AudioBuffer.insert(m_AudioBuffer.end(), resampled.begin(),
-                         resampled.end());
+    std::vector<float> resampled_samples = ResampleAudioSoXR(
+        samples, sample_count, sample_rate, WHISPER_SAMPLE_RATE, 2);
+    std::vector<float> mono_samples;
+    ConvertStereoToMono(resampled_samples.data(), resampled_samples.size(),
+                        mono_samples);
+    m_AudioStream.Write(mono_samples.data(), mono_samples.size());
   } else {
-    m_AudioBuffer.insert(m_AudioBuffer.end(), samples, samples + sample_count);
+    m_AudioStream.Write(samples, sample_count);
   }
-
-  m_HasNewAudio.store(true);
 }
 
-void WhisperTranscriber::ProcessingLoop() {
+void WhisperTranscriber::TranscriptionLoop(std::stop_token s) {
   const int segment_samples =
-      (m_Config.segment_length_ms * WHISPER_SAMPLE_RATE) / 1000;
+      (m_Config.segment_length_ms * WHISPER_SAMPLE_RATE * 1) / 1000;
   const int overlap_samples =
-      (m_Config.overlap_ms * WHISPER_SAMPLE_RATE) / 1000;
+      (m_Config.overlap_ms * WHISPER_SAMPLE_RATE * 1) / 1000;
 
   auto last_process_time = std::chrono::steady_clock::now();
+  m_AudioDataBufferOld.reserve(overlap_samples);
 
-  while (!m_ShouldStop.load()) {
-    if (!m_HasNewAudio.load()) {
+  while (!s.stop_requested()) {
+    const Core::Stream<float>::Buffer& buffer = m_AudioStream.Read();
+    if (!buffer.size) {
       std::this_thread::yield();
       continue;
     }
 
-    std::vector<float> segment_data;
-    {
-      std::lock_guard<std::mutex> lock(m_BufferMutex);
+    std::vector<float> segment_data(segment_samples);
+    segment_data.assign(buffer.buffer, buffer.buffer + buffer.size);
 
-      if (m_AudioBuffer.size() >= segment_samples) {
-        // Extract segment with overlap
-        int extract_size = std::min(segment_samples, (int)m_AudioBuffer.size());
-        segment_data.assign(m_AudioBuffer.begin(),
-                            m_AudioBuffer.begin() + extract_size);
-
-        // Remove processed samples (keeping overlap)
-        int remove_count = extract_size - overlap_samples;
-        if (remove_count > 0) {
-          m_AudioBuffer.erase(m_AudioBuffer.begin(),
-                              m_AudioBuffer.begin() + remove_count);
-        }
-
-        if (m_AudioBuffer.size() < segment_samples) {
-          m_HasNewAudio.store(false);
-        }
-      }
-    }
-
-    if (!segment_data.empty() && IsValidAudioSegment(segment_data)) {
+    if (!segment_data.empty()) {
       auto now = std::chrono::steady_clock::now();
       auto timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                               now.time_since_epoch())
@@ -219,6 +189,10 @@ WhisperTranscriber::ProcessSegment(const AudioSegment& segment) {
     return result;
   }
 
+  if (!m_Params.no_context) {
+    m_Params.prompt_tokens = m_PromptTokens.data();
+    m_Params.prompt_n_tokens = m_PromptTokens.size();
+  }
   // Run whisper inference
   int ret = whisper_full(m_Context, m_Params, segment.samples.data(),
                          static_cast<int>(segment.samples.size()));
@@ -246,8 +220,14 @@ WhisperTranscriber::ProcessSegment(const AudioSegment& segment) {
       // Get confidence (probability)
       float segment_confidence = 0.0f;
       const int n_tokens = whisper_full_n_tokens(m_Context, i);
+      if (!m_Params.no_context) {
+        m_PromptTokens.clear();
+      }
       for (int j = 0; j < n_tokens; ++j) {
         segment_confidence += whisper_full_get_token_p(m_Context, i, j);
+        if (!m_Params.no_context) {
+          m_PromptTokens.push_back(whisper_full_get_token_id(m_Context, i, j));
+        }
       }
       if (n_tokens > 0) {
         segment_confidence /= n_tokens;
@@ -285,138 +265,82 @@ WhisperTranscriber::TranscribeFile(const std::string& audio_file_path) {
   // TODO: Implement audio file loading (WAV, MP3, etc.)
   // For now, return empty result
 
-  return TranscribeBuffer(audio_data.data(),
-                          static_cast<int>(audio_data.size()),
-                          WHISPER_SAMPLE_RATE);
-}
-
-TranscriptionResult WhisperTranscriber::TranscribeBuffer(const float* samples,
-                                                         int sample_count,
-                                                         int sample_rate) {
-  TranscriptionResult result;
-
-  if (!IsModelLoaded()) {
-    if (!Initialize()) {
-      return result;
-    }
-  }
-
-  // Resample if needed using high-quality SoX Resampler
-  std::vector<float> audio_data;
-  if (sample_rate != WHISPER_SAMPLE_RATE) {
-    audio_data = ResampleAudioSoXR(samples, sample_count, sample_rate,
-                                   WHISPER_SAMPLE_RATE);
-  } else {
-    audio_data.assign(samples, samples + sample_count);
-  }
-
-  AudioSegment segment;
-  segment.samples = std::move(audio_data);
-  segment.sample_rate = WHISPER_SAMPLE_RATE;
-  segment.timestamp_ms = 0;
-
-  return ProcessSegment(segment);
+  return result;
 }
 
 std::vector<float> WhisperTranscriber::ResampleAudioSoXR(const float* samples,
                                                          int sample_count,
                                                          int input_rate,
-                                                         int output_rate) {
+                                                         int output_rate,
+                                                         int channels) {
   if (input_rate == output_rate) {
     return std::vector<float>(samples, samples + sample_count);
   }
 
-  // Calculate output sample count
+  // Calculate output sample count for interleaved stereo
   double ratio = static_cast<double>(output_rate) / input_rate;
-  size_t output_count = static_cast<size_t>(sample_count * ratio + 0.5);
-
+  // size_t output_count = static_cast<size_t>(sample_count * ratio + 0.5);
+  size_t output_count = sample_count * ratio + 0.5;
   std::vector<float> output(output_count);
 
-  // SoX Resampler error handling
+  // Create a one-shot resampler for this specific operation
   soxr_error_t error = nullptr;
 
-  // Create SoX Resampler instance with high quality settings
+  // Configure I/O specification (float32 input and output)
   soxr_io_spec_t io_spec = soxr_io_spec(SOXR_FLOAT32_I, SOXR_FLOAT32_I);
 
-  // Use high quality configuration for polyphase downsampling
+  // Configure quality (SOXR_HQ for high quality)
   soxr_quality_spec_t quality_spec = soxr_quality_spec(SOXR_HQ, 0);
 
-  // Runtime spec - no specific requirements
-  soxr_runtime_spec_t runtime_spec =
-      soxr_runtime_spec(1); // Single-threaded for simplicity
+  // Create resampler for 2-channel interleaved stereo
+  soxr_t resampler = soxr_create(input_rate, output_rate, channels, &error,
+                                 &io_spec, &quality_spec, nullptr);
 
-  // Create the resampler
-  soxr_t resampler =
-      soxr_create(input_rate, output_rate, 2, // 2 channels (stereo)
-                  &error, &io_spec, &quality_spec, &runtime_spec);
+  if (error || !resampler) {
+    std::cerr << "SoX Resampler creation failed: "
+              << (error ? soxr_strerror(error) : "Unknown error") << std::endl;
 
-  if (error) {
-    std::cerr << "SoX Resampler creation failed: " << soxr_strerror(error)
-              << std::endl;
-    // Fallback to simple linear interpolation
-    return ResampleAudio(samples, sample_count, input_rate, output_rate);
+    return {};
   }
 
-  // Perform the resampling
+  // Perform the resampling in one shot
   size_t input_used = 0;
   size_t output_generated = 0;
 
-  error = soxr_process(resampler, samples, sample_count, &input_used,
-                       output.data(), output_count, &output_generated);
+  size_t ilen = sample_count / channels;
+  size_t olen = output_count / channels;
+
+  error = soxr_process(resampler, samples, ilen, &input_used, output.data(),
+                       olen, &output_generated);
 
   if (error) {
     std::cerr << "SoX Resampler processing failed: " << soxr_strerror(error)
               << std::endl;
-    soxr_delete(resampler);
-    // Fallback to simple linear interpolation
-    return ResampleAudio(samples, sample_count, input_rate, output_rate);
+    // Return original data as fallback (shouldn't happen with proper input)
+    return {};
   }
 
-  // Clean up
-  soxr_delete(resampler);
+  // Step 2: Flush remaining buffered output
 
-  // Resize output vector to actual generated samples
-  output.resize(output_generated);
+  size_t flushed = 0;
+  error = soxr_process(resampler, NULL, 0, NULL, // no more input
+                       output.data() + output_generated * 2,
+                       olen - output_generated,
+                       &flushed // flush output
+  );
 
-  std::cout << "SoX Resampler: " << sample_count << " samples @ " << input_rate
-            << "Hz -> " << output_generated << " samples @ " << output_rate
-            << "Hz" << std::endl;
-
-  return output;
-}
-
-std::vector<float> WhisperTranscriber::ResampleAudio(const float* samples,
-                                                     int sample_count,
-                                                     int input_rate,
-                                                     int output_rate) {
-  if (input_rate == output_rate) {
-    return std::vector<float>(samples, samples + sample_count);
+  if (error) {
+    fprintf(stderr, "soxr_process error (flush): %s\n", error);
   }
 
-  // Simple linear interpolation resampling (fallback method)
-  double ratio = static_cast<double>(output_rate) / input_rate;
-  int output_count = static_cast<int>(sample_count * ratio);
+  // printf("Flushed frames = %zu\n", flushed);
 
-  std::vector<float> output(output_count);
+  // soxr_delete(resampler);
 
-  for (int i = 0; i < output_count; ++i) {
-    double src_index = i / ratio;
-    int src_i = static_cast<int>(src_index);
-    double frac = src_index - src_i;
-
-    if (src_i + 1 < sample_count) {
-      output[i] = static_cast<float>(samples[src_i] * (1.0 - frac) +
-                                     samples[src_i + 1] * frac);
-    } else if (src_i < sample_count) {
-      output[i] = samples[src_i];
-    } else {
-      output[i] = 0.0f;
-    }
-  }
-
-  std::cout << "Fallback Linear Resampler: " << sample_count << " samples @ "
-            << input_rate << "Hz -> " << output_count << " samples @ "
-            << output_rate << "Hz" << std::endl;
+  // std::cout << "SoX Resampler: " << sample_count << " samples @ " <<
+  // input_rate
+  //           << "Hz -> " << output_generated << " samples @ " << output_rate
+  //           << "Hz (used " << input_used << " input samples)" << std::endl;
 
   return output;
 }
@@ -448,13 +372,22 @@ float WhisperTranscriber::CalculateRMS(const float* samples, int sample_count) {
   return static_cast<float>(std::sqrt(sum / sample_count));
 }
 
+void WhisperTranscriber::ConvertStereoToMono(const float* samples,
+                                             int sample_count,
+                                             std::vector<float>& output) {
+  output.reserve(sample_count / 2);
+  for (int i = 0; i < sample_count; i += 2) {
+    output.push_back((samples[i] + samples[i + 1]) * 0.5f);
+  }
+}
+
 std::string WhisperTranscriber::GetModelInfo() const {
   if (!IsModelLoaded()) {
     return "No model loaded";
   }
 
   // Get model information
-  return "Whisper model loaded"; // You can expand this with actual model info
+  return m_Config.model_path; // You can expand this with actual model info
 }
 
 std::vector<std::string> WhisperTranscriber::GetSupportedLanguages() const {
@@ -470,21 +403,4 @@ std::vector<std::string> WhisperTranscriber::GetSupportedLanguages() const {
 
   return languages;
 }
-
-// TranscriptionJob implementation
-TranscriptionJob::TranscriptionJob(
-    WhisperTranscriber& transcriber, const std::vector<float>& audio_data,
-    int sample_rate, WhisperTranscriber::TranscriptionCallback callback)
-    : m_Transcriber(transcriber), m_AudioData(audio_data),
-      m_SampleRate(sample_rate), m_Callback(callback) {}
-
-void TranscriptionJob::Execute() {
-  auto result = m_Transcriber.TranscribeBuffer(
-      m_AudioData.data(), static_cast<int>(m_AudioData.size()), m_SampleRate);
-
-  if (m_Callback && !result.text.empty()) {
-    m_Callback(result);
-  }
-}
-
 } // namespace Transcribe

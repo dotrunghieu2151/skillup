@@ -10,7 +10,7 @@
       "architecture": "x64",
       "binaryDir": "${sourceDir}/out/build/${presetName}",
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/Vendors/vcpkg/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_FIND_DEBUG_MODE": false,
         "VCPKG_DISABLE_METRICS": false,
         "CMAKE_C_COMPILER": "cl.exe",

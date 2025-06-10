@@ -1,5 +1,3 @@
-
-
 #include <iostream>
 #include <mutex>
 #include <stdio.h>
@@ -225,8 +223,12 @@ void Application::Init() {
   ImGui_ImplGlfw_InitForOpenGL(m_WindowHandle, true);
   ImGui_ImplOpenGL3_Init("#version 330");
 
-  // Load default font
+  // Load fonts with proper UTF-8 support
   ImFontConfig fontConfig;
+  fontConfig.OversampleH = 2;
+  fontConfig.OversampleV = 2;
+
+  // Load default font with basic Latin range
   ImFont* robotoFont = io.Fonts->AddFontFromFileTTF(
       "Assets/Fonts/Roboto-Regular.ttf", 20.0f, &fontConfig);
   s_Fonts["Default"] = robotoFont;
@@ -234,6 +236,34 @@ void Application::Init() {
                                                  20.0f, &fontConfig);
   s_Fonts["Italic"] = io.Fonts->AddFontFromFileTTF(
       "Assets/Fonts/Roboto-Italic.ttf", 20.0f, &fontConfig);
+
+  // Configure Japanese font with proper glyph ranges
+  ImFontConfig jpFontConfig;
+  jpFontConfig.OversampleH = 2;
+  jpFontConfig.OversampleV = 2;
+  jpFontConfig.MergeMode = false; // Don't merge, keep as separate font
+
+  // Load Japanese font with Japanese glyph ranges
+  static const ImWchar japanese_ranges[] = {
+      0x0020, 0x00FF, // Basic Latin + Latin Supplement
+      0x2000, 0x206F, // General Punctuation
+      0x3000, 0x30FF, // Hiragana, Katakana
+      0x31F0, 0x31FF, // Katakana Phonetic Extensions
+      0xFF00, 0xFFEF, // Half-width characters
+      0x4E00, 0x9FAF, // CJK Ideographs (Common Kanji)
+      0x3400, 0x4DBF, // CJK Extension A (Rare Kanji)
+      0,
+  };
+
+  ImFont* jpFont =
+      io.Fonts->AddFontFromFileTTF("Assets/Fonts/NotoSansJP-Regular.ttf", 20.0f,
+                                   &jpFontConfig, japanese_ranges);
+  s_Fonts["JP"] = jpFont;
+
+  // Build font atlas
+  io.Fonts->Build();
+
+  // Set default font (can switch to jpFont if you want Japanese as default)
   io.FontDefault = robotoFont;
 }
 

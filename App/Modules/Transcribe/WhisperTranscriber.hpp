@@ -1,6 +1,9 @@
 #pragma once
 
+#include <algorithm>
+#include <array>
 #include <atomic>
+#include <cassert>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -13,6 +16,7 @@
 
 #include "AudioController.hpp"
 #include "Core/Job/Job.hpp"
+#include "Core/Stream/Stream.hpp"
 
 namespace Transcribe {
 
@@ -31,11 +35,12 @@ public:
     std::string model_path = "models/ggml-base.en.bin";
     std::string language = "auto"; // "auto" for auto-detection
     bool translate_to_english = false;
-    int n_threads = 4;
+    int n_threads = std::min(4, (int32_t)std::thread::hardware_concurrency());
     bool use_gpu = true;
     float vad_threshold = 0.6f;
     int segment_length_ms = 5000; // 5 seconds
     int overlap_ms = 500;         // 500ms overlap
+    int input_rate = 48000;
   };
 
   using TranscriptionCallback = std::function<void(const TranscriptionResult&)>;
@@ -56,14 +61,13 @@ public:
   void StopRealTimeTranscription();
   bool IsTranscribing() const { return m_IsTranscribing.load(); }
 
-  // Process audio buffer (for integration with existing audio system)
   void ProcessAudioBuffer(const float* samples, int sample_count,
                           int sample_rate);
 
   // Batch transcription
   TranscriptionResult TranscribeFile(const std::string& audio_file_path);
-  TranscriptionResult TranscribeBuffer(const float* samples, int sample_count,
-                                       int sample_rate);
+  // Get configuration
+  const Config& GetConfig() const { return m_Config; }
 
   // Configuration
   void SetLanguage(const std::string& language) {
@@ -79,9 +83,10 @@ public:
   std::string GetModelInfo() const;
   std::vector<std::string> GetSupportedLanguages() const;
 
-  // Fallback simple resampling method
-  std::vector<float> ResampleAudio(const float* samples, int sample_count,
-                                   int input_rate, int output_rate);
+  // High-quality resampling using SoX Resampler
+  std::vector<float> ResampleAudioSoXR(const float* samples, int sample_count,
+                                       int input_rate, int output_rate,
+                                       int channels);
 
 private:
   struct AudioSegment {
@@ -95,47 +100,29 @@ private:
   whisper_full_params m_Params;
 
   std::atomic<bool> m_IsTranscribing{false};
-  std::atomic<bool> m_ShouldStop{false};
 
   TranscriptionCallback m_Callback;
-  std::thread m_ProcessingThread;
+  std::jthread audioProcessingThread;
+  std::jthread transcriptionThread;
 
   // Audio buffer management
-  std::vector<float> m_AudioBuffer;
-  std::mutex m_BufferMutex;
-  std::atomic<bool> m_HasNewAudio{false};
+  std::vector<float> m_AudioDataBufferOld;
+  std::vector<whisper_token> m_PromptTokens;
+  Core::Stream<float> m_AudioStream;
 
   // Internal methods
   bool LoadModel();
   void SetupParams();
-  void ProcessingLoop();
+  void TranscriptionLoop(std::stop_token s);
   TranscriptionResult ProcessSegment(const AudioSegment& segment);
-
-  // High-quality resampling using SoX Resampler
-  std::vector<float> ResampleAudioSoXR(const float* samples, int sample_count,
-                                       int input_rate, int output_rate);
 
   bool IsValidAudioSegment(const std::vector<float>& samples);
 
   // VAD (Voice Activity Detection) helpers
   bool HasSpeech(const float* samples, int sample_count);
   float CalculateRMS(const float* samples, int sample_count);
-};
-
-// Job for async transcription
-class TranscriptionJob : public Core::Job {
-public:
-  TranscriptionJob(WhisperTranscriber& transcriber,
-                   const std::vector<float>& audio_data, int sample_rate,
-                   WhisperTranscriber::TranscriptionCallback callback);
-
-  void Execute() override;
-
-private:
-  WhisperTranscriber& m_Transcriber;
-  std::vector<float> m_AudioData;
-  int m_SampleRate;
-  WhisperTranscriber::TranscriptionCallback m_Callback;
+  void ConvertStereoToMono(const float* samples, int sample_count,
+                           std::vector<float>& output);
 };
 
 } // namespace Transcribe

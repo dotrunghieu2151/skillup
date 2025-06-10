@@ -7,5 +7,13 @@ target_sources(Vendors
     imguiPlot/imgui_plot.cpp
 )
 
+
+# Add whisper.cpp with CUDA support
+set(WHISPER_BUILD_TESTS OFF CACHE BOOL "whisper: build tests" FORCE)
+set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "whisper: build examples" FORCE)
+set(GGML_CUDA ON CACHE BOOL "ggml: use CUDA" FORCE)
+
+add_subdirectory(whisper.cpp)
+
 target_link_libraries(Vendors PUBLIC imgui::imgui)
 target_include_directories(Vendors PUBLIC ${CMAKE_CURRENT_LIST_DIR})

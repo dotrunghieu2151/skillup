@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0.0)
+cmake_minimum_required(VERSION 3.12.0)
 
 # set(VCPKG_LIBRARY_LINKAGE static)
 # set(VCPKG_CRT_LINKAGE static)
@@ -19,6 +19,11 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
 
 project(skillup VERSION 0.1.0 LANGUAGES CXX CUDA)
+
+# Set output directories with configuration
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/$<CONFIG>)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/$<CONFIG>)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/$<CONFIG>)
 
 option (BUILD_TESTS "Override building of tests" ON)
 option (MEMORY_DEBUG "Override enabling memory debug" ON) 
@@ -58,11 +63,6 @@ endif()
 # Include dir
 include_directories(${CMAKE_CURRENT_LIST_DIR})
 
-# Add whisper.cpp with CUDA support
-set(WHISPER_BUILD_TESTS OFF CACHE BOOL "whisper: build tests" FORCE)
-set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "whisper: build examples" FORCE)
-set(GGML_CUDA ON CACHE BOOL "ggml: use CUDA" FORCE)
-add_subdirectory(third_party/whisper.cpp)
 
 add_subdirectory(Vendors)
 add_subdirectory(Core)

@@ -1,5 +1,7 @@
 # Whisper.cpp Integration Guide
 
+git submodule update --init --recursive
+
 This document explains how to build and use the [whisper.cpp](https://github.com/ggml-org/whisper.cpp) integration in the skillup project for real-time audio transcription and translation with NVIDIA GPU acceleration.
 
 ## Prerequisites

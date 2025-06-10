@@ -8,5 +8,6 @@ imgui.ini
 /models/*.bin
 
 # Third party builds (but keep submodules)
-/third_party/*/build/
-/third_party/*/out/
+/Vendors/*/build/
+/Vendors/*/out/
+/Assets/LLM/*

@@ -86,8 +86,8 @@ public:
 
   void Render() override {
     if (!ImGui::Begin("Real-time Transcription & Translation", &m_Visible,
-                      ImGuiWindowFlags_AlwaysAutoResize |
-                          ImGuiWindowFlags_MenuBar)) {
+                      ImGuiWindowFlags_MenuBar |
+                          ImGuiWindowFlags_HorizontalScrollbar)) {
       ImGui::End();
       return;
     }
@@ -236,19 +236,28 @@ public:
                                 ImGuiTreeNodeFlags_DefaultOpen)) {
       ImGui::Text("Japanese (Original):");
       ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.1f, 0.1f, 0.2f, 1.0f));
+      ImGui::PushFont(Core::Application::Get().GetFont("JP"));
       ImGui::InputTextMultiline(
           "##transcription", const_cast<char*>(m_CurrentTranscription.c_str()),
           m_CurrentTranscription.length() + 1, ImVec2(-1, 80),
           ImGuiInputTextFlags_ReadOnly);
+      ImGui::PopFont();
       ImGui::PopStyleColor();
 
       ImGui::Spacing();
       ImGui::Text("English (Translation):");
+
+      // Calculate responsive size based on available content region
+      ImVec2 availableSize = ImGui::GetContentRegionAvail();
+      float responsiveHeight = std::max(
+          80.0f,
+          availableSize.y * 0.3f); // At least 80px, or 30% of available height
+
       ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
-      ImGui::InputTextMultiline("##translation",
-                                const_cast<char*>(m_CurrentTranslation.c_str()),
-                                m_CurrentTranslation.length() + 1,
-                                ImVec2(-1, 80), ImGuiInputTextFlags_ReadOnly);
+      ImGui::InputTextMultiline(
+          "##translation", const_cast<char*>(m_CurrentTranslation.c_str()),
+          m_CurrentTranslation.length() + 1, ImVec2(-1, responsiveHeight),
+          ImGuiInputTextFlags_ReadOnly);
       ImGui::PopStyleColor();
     } else if (m_RecordingMode == 1) {
       // Audio-only mode info

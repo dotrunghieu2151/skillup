@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstring>
@@ -140,31 +141,10 @@ public:
         isRecording = true;
         const BufferT& recordBuffer = recordStream->Read();
         if (recordBuffer.size) {
-          // Store audio data for playback
-          int start{};
-          if (recordingWithTranscription) {
-            std::vector<float> resampled = whisperTranscriber->ResampleAudio(
-                recordBuffer.buffer, recordBuffer.size, 48000, 16000);
-            recordAudioData.reserve(recordAudioData.capacity() +
-                                    resampled.size());
-            start = recordAudioData.size();
-            for (int i{}; i < resampled.size(); ++i) {
-              recordAudioData.push_back(resampled[i]);
-            }
-          } else {
-            recordAudioData.reserve(recordAudioData.capacity() +
-                                    recordBuffer.size);
-            start = recordAudioData.size();
-            for (int i{}; i < recordBuffer.size; ++i) {
-              recordAudioData.push_back(recordBuffer.buffer[i]);
-            }
-          }
-
-          recordAudioDataPtr = &recordAudioData[start];
-          recordAudioDataSize = static_cast<int>(recordBuffer.size);
 
           // Only process for transcription if recording with transcription
           // enabled
+          int start{};
           if (recordingWithTranscription) {
 
             // Auto-start transcription if enabled and not already running
@@ -172,10 +152,27 @@ public:
                 !showLoadingPopup) {
               StartTranscription();
             }
-
+            start = recordAudioData.size();
+            std::vector<float> resampled_samples =
+                whisperTranscriber->ResampleAudioSoXR(
+                    recordBuffer.buffer, recordBuffer.size, 48000, 16000, 2);
+            recordAudioData.insert(recordAudioData.end(),
+                                   resampled_samples.begin(),
+                                   resampled_samples.end());
             // Process audio for real-time transcription
-            ProcessAudioForTranscription(recordBuffer.buffer,
-                                         static_cast<int>(recordBuffer.size));
+
+            ProcessAudioForTranscription(recordBuffer.buffer, recordBuffer.size,
+                                         48000);
+            recordAudioDataPtr = &recordAudioData[start];
+            recordAudioDataSize = static_cast<int>(std::min(
+                recordAudioData.size(), (size_t)resampled_samples.size()));
+          } else {
+            // Store audio data for playback
+            start = recordAudioData.size();
+            recordAudioData.insert(recordAudioData.end(), recordBuffer.buffer,
+                                   recordBuffer.buffer + recordBuffer.size);
+            recordAudioDataPtr = &recordAudioData[start];
+            recordAudioDataSize = static_cast<int>(recordBuffer.size);
           }
         }
       } else if (recordStream->IsStopped()) {
@@ -200,6 +197,14 @@ public:
   void OnUIRender() override {
     if (open) {
       transcribeUIComponent->Render();
+    } else {
+      if (recordStream) {
+        recordStream->Stop();
+      }
+
+      if (playbackStream) {
+        playbackStream->Stop();
+      }
     }
 
     // Render loading popup
@@ -245,16 +250,19 @@ public:
 private:
   std::unique_ptr<WhisperTranscriber> CreateWhisperTranscriber() {
     WhisperTranscriber::Config config;
-    config.model_path = "models/ggml-small.en.bin"; // Large turbo model for
-                                                    // better Japanese
-    config.language = "en";                         // Japanese input
-    config.translate_to_english = false;            // We want original Japanese
+    config.model_path =
+        "Assets/LLM/WhisperModels/ggml-large-v3-turbo-q8_0.bin"; // Large
+                                                                 // turbo
+                                                                 // model for
+                                                                 // better
+                                                                 // Japanese
+    config.language = "ja";              // Japanese input
+    config.translate_to_english = false; // We want original Japanese
     config.use_gpu = true;
     config.n_threads = 4;
-    config.vad_threshold = 0.5f; // Lower threshold for Japanese speech patterns
-    config.segment_length_ms = 4000; // Slightly longer for Japanese processing
-    config.overlap_ms = 750;         // More overlap for better Japanese context
-
+    config.vad_threshold = 0.6f; // Lower threshold for Japanese speech patterns
+    config.segment_length_ms = 10000; // Slightly longer for Japanese processing
+    config.overlap_ms = 2000; // More overlap for better Japanese context
     return std::make_unique<WhisperTranscriber>(config);
   }
 
@@ -262,9 +270,10 @@ public:
   // Whisper transcription methods
   bool StartTranscription() {
     // Show loading popup with model path
-    loadingModelPath = whisperTranscriber
-                           ? "models/ggml-large-v3-turbo-q8_0.bin"
-                           : "Unknown model";
+    loadingModelPath =
+        whisperTranscriber
+            ? "Assets/LLM/WhisperModels/ggml-large-v3-turbo-q8_0.bin"
+            : "Unknown model";
     showLoadingPopup = true;
     modelLoadingComplete.store(false);
     modelLoadingSuccess.store(false);
@@ -285,7 +294,11 @@ public:
               [this](const TranscriptionResult& result) {
                 // Update current English translation
                 if (!result.text.empty()) {
-                  currentEnglishTranslation += "\n" + result.text;
+                  if (whisperTranscriber->GetConfig().translate_to_english) {
+                    currentEnglishTranslation += "\n" + result.text;
+                  } else {
+                    currentJapaneseTranscription += "\n" + result.text;
+                  }
                 }
               });
         }
@@ -306,9 +319,10 @@ public:
     isTranscribing = false;
   }
 
-  void ProcessAudioForTranscription(const float* samples, int sampleCount) {
+  void ProcessAudioForTranscription(const float* samples, int sampleCount,
+                                    int sampleRate) {
     if (isTranscribing && whisperTranscriber) {
-      whisperTranscriber->ProcessAudioBuffer(samples, sampleCount, 48000);
+      whisperTranscriber->ProcessAudioBuffer(samples, sampleCount, sampleRate);
     }
   }
 
@@ -341,7 +355,7 @@ public:
 
     // Save as 16-bit PCM WAV for better compatibility
     bool success =
-        AudioFileWriter::WriteWAV(fullPath, recordAudioData, 48000, 2);
+        AudioFileWriter::WriteWAV(fullPath, recordAudioData, 16000, 2);
 
     if (success) {
       // Log success with recording mode info
