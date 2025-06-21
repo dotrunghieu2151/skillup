@@ -53,6 +53,7 @@ bool WhisperTranscriber::LoadModel() {
     std::cerr << "Model file not found: " << m_Config.model_path << std::endl;
     return false;
   }
+  // ggml_backend_load_all();
 
   // Initialize whisper context
   struct whisper_context_params cparams = whisper_context_default_params();
@@ -70,7 +71,7 @@ void WhisperTranscriber::SetupParams() {
   // Basic parameters
   m_Params.n_threads = m_Config.n_threads;
   m_Params.translate = m_Config.translate_to_english;
-  m_Params.print_progress = false;
+  m_Params.print_progress = true;
   m_Params.print_timestamps = true;
   m_Params.print_realtime = true;
   m_Params.print_special = false;
@@ -82,7 +83,13 @@ void WhisperTranscriber::SetupParams() {
   }
 
   // Audio processing
-  m_Params.audio_ctx = 0; // Use full audio context
+  // https://github.com/ggml-org/whisper.cpp/issues/1855
+  // for faster encoding
+  // m_Params.audio_ctx =
+  //     (m_Config.segment_length_ms / 30000) * 1500 + 128; // 30 seconds is the
+  //                                                        // maximum context
+  //                                                        // length
+  m_Params.audio_ctx = 0;
 
   // VAD settings
   m_Params.no_speech_thold = m_Config.vad_threshold;
@@ -152,8 +159,8 @@ void WhisperTranscriber::TranscriptionLoop(std::stop_token s) {
       std::this_thread::yield();
       continue;
     }
-
     std::vector<float> segment_data(segment_samples);
+
     segment_data.assign(buffer.buffer, buffer.buffer + buffer.size);
 
     if (!segment_data.empty()) {
@@ -166,8 +173,9 @@ void WhisperTranscriber::TranscriptionLoop(std::stop_token s) {
       segment.samples = std::move(segment_data);
       segment.sample_rate = WHISPER_SAMPLE_RATE;
       segment.timestamp_ms = timestamp_ms;
-
+      std::cout << "Segment: " << segment.timestamp_ms << std::endl;
       auto result = ProcessSegment(segment);
+      std::cout << "Result: " << result.text << std::endl;
 
       if (!result.text.empty() && m_Callback) {
         m_Callback(result);

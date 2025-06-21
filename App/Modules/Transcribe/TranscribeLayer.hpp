@@ -251,13 +251,13 @@ private:
   std::unique_ptr<WhisperTranscriber> CreateWhisperTranscriber() {
     WhisperTranscriber::Config config;
     config.model_path =
-        "Assets/LLM/WhisperModels/ggml-large-v3-turbo-q8_0.bin"; // Large
-                                                                 // turbo
-                                                                 // model for
-                                                                 // better
-                                                                 // Japanese
-    config.language = "ja";              // Japanese input
-    config.translate_to_english = false; // We want original Japanese
+        "Assets/LLM/WhisperModels/ggml-small.en.bin"; // Large
+                                                      // turbo
+                                                      // model for
+                                                      // better
+                                                      // Japanese
+    config.language = "en";                           // Japanese input
+    config.translate_to_english = true; // We want original Japanese
     config.use_gpu = true;
     config.n_threads = 4;
     config.vad_threshold = 0.6f; // Lower threshold for Japanese speech patterns

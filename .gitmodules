@@ -4,3 +4,6 @@
 [submodule "Vendors/vcpkg"]
 	path = Vendors/vcpkg
 	url = https://github.com/microsoft/vcpkg.git
+[submodule "Vendors/llama-cpp"]
+	path = Vendors/llama-cpp
+	url = https://github.com/ggml-org/llama.cpp
