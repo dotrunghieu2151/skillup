@@ -3,7 +3,7 @@ add_library(Transcribe STATIC)
 target_sources(Transcribe 
   PRIVATE
     WhisperTranscriber.cpp
-    # MarinaTranslator.cpp
+    MarinaTranslator.cpp
     AudioFileWriter.hpp
 )
 
@@ -16,5 +16,5 @@ target_link_libraries(Transcribe
     whisper
     soxr::soxr
     portaudio
-    # llama
+    llama
 )

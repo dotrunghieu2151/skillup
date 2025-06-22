@@ -1,0 +1,154 @@
+# SkillUp Project Intelligence
+
+## Project Identity
+This is SkillUp - a C++20 real-time audio transcription and translation application specializing in Japanese-English language processing. The project combines Whisper.cpp (transcription) and Llama.cpp (translation) with a modern ImGui interface.
+
+## Critical Implementation Patterns
+
+### AI Model Integration
+- **Whisper.cpp**: Always wrap in RAII classes with explicit Initialize/Shutdown
+- **Llama.cpp**: Use optional<> for conditional model ownership
+- **GPU Memory**: Both models loaded simultaneously require 8GB+ VRAM
+- **Threading**: Each AI model gets its own processing thread with std::jthread
+
+### Audio Processing Chain
+```cpp
+PortAudio → AudioController → Core::Stream<float> → VAD → AI Models → UI
+```
+- Always process at 48kHz, downsample to 16kHz for Whisper
+- Use lock-free MPMC queues (Core::Stream<T>) for real-time audio
+- Maintain 10-second rolling context window for accuracy
+- VAD threshold 0.5 works best for Japanese speech patterns
+
+### Critical Architecture Decisions
+1. **Layer-based Architecture**: Each major feature is an ApplicationLayer
+2. **Event-driven Communication**: Use Core::EventEmitter<T> for UI events
+3. **Atomic State Management**: Thread-safe flags for cross-thread status
+4. **RAII Resource Management**: Heavy AI models use explicit lifecycle
+
+## Current Development Context
+
+### Active Branch: feature/llama
+**Critical Blocker**: MarinaTranslator::LlamaTranslator::Generate() method is empty!
+Location: `App/Modules/Transcribe/MarinaTranslator.cpp:117`
+
+### Working Features (Don't Break These!)
+- ✅ Real-time Japanese transcription via Whisper (fully functional)
+- ✅ Audio capture and visualization (production quality)
+- ✅ GPU acceleration for Whisper models (CUDA working)
+- ✅ ImGui interface with docking (stable UI)
+
+### Implementation Priorities
+1. **URGENT**: Complete Llama inference in Generate() method
+2. Test dual AI pipeline (Whisper + Llama)
+3. Optimize GPU memory for concurrent models
+4. Add error handling for AI model failures
+
+## Development Patterns That Work
+
+### Model Configuration Patterns
+```cpp
+// Whisper - Working Configuration
+config.model_path = "ggml-large-v3-turbo-q8_0.bin";
+config.language = "ja";
+config.segment_length_ms = 4000;
+config.overlap_ms = 750;
+config.vad_threshold = 0.5f;
+
+// Llama - Target Configuration
+config.n_gpu_layers = 99;  // Use all GPU layers
+config.n_ctx = 2048;       // Context window
+sampler: greedy;           // Deterministic output
+```
+
+### Threading Patterns
+- Main Thread: UI and event handling only
+- Audio Thread: PortAudio callback, minimal processing
+- AI Threads: Separate for transcription and translation
+- Use std::atomic<bool> for thread-safe status flags
+
+### Error Handling Strategy
+- AI model failures should gracefully degrade (continue with single model)
+- GPU OOM should fallback to CPU processing
+- Always check Initialize() return values
+- Use std::cerr for error logging, std::cout for status
+
+## Code Quality Patterns
+
+### Memory Management
+- Use RAII for all AI resources
+- std::optional<> for conditional heavy objects
+- Fixed-size buffers for audio (prevent memory growth)
+- std::jthread for automatic thread cleanup
+
+### Performance Optimization
+- Process audio in 4-second segments with 750ms overlap
+- Use quantized models (Q4_K_M) for memory efficiency
+- Lock-free queues for audio pipeline
+- GPU acceleration critical for real-time performance
+
+## File Organization Intelligence
+
+### Key Files to Understand
+- `TranscribeLayer.hpp`: Main orchestrator, start here
+- `WhisperTranscriber.cpp`: Working AI integration example
+- `MarinaTranslator.cpp`: Incomplete, needs inference implementation
+- `Core/Stream/`: Lock-free audio streaming system
+- `Core/Application.hpp`: Layer management framework
+
+### Build System Notes
+- vcpkg.json: All dependencies properly configured
+- CMake presets: Use `cmake --preset vcpkg`
+- Git submodules: whisper.cpp and llama.cpp (may need sync)
+- CUDA required for optimal performance
+
+## Japanese Language Specifics
+
+### Whisper Configuration for Japanese
+- Use large-v3-turbo model for best accuracy
+- Segment length 4000ms (longer for Japanese processing)
+- VAD threshold 0.5 (lower for Japanese speech patterns)
+- Always set language="ja" explicitly
+
+### Translation Considerations
+- Japanese→English requires context awareness
+- Gemma-2-2b model chosen for Japanese translation
+- Need proper prompt engineering in Generate() method
+- Consider cultural context in translation quality
+
+## Development Workflow
+
+### When Adding Features
+1. Always check Memory Bank files first (memory-bank/*.md)
+2. Follow existing patterns in Core/ and App/Modules/
+3. Add new UI components following TranscribeUIComponent pattern
+4. Test with real Japanese audio samples
+5. Verify GPU memory usage with both models loaded
+
+### When Debugging
+- Check atomic flags first (isTranscribing, isRecording, etc.)
+- GPU issues: Check CUDA availability and memory
+- Audio issues: Verify WASAPI device compatibility
+- UI issues: Check ImGui context and docking state
+
+### Performance Testing
+- Test with 30+ minute recordings
+- Monitor GPU memory usage during dual processing
+- Verify <3 second latency for transcription
+- Test CPU fallback when GPU unavailable
+
+## Integration Wisdom
+
+### What Works Well Together
+- PortAudio + WASAPI for low-latency audio
+- ImGui + GLFW for responsive UI
+- std::jthread + atomic flags for threading
+- SoXR for high-quality audio resampling
+
+### What to Avoid
+- Don't mix raw pointers with RAII objects
+- Don't block UI thread with model loading
+- Don't share mutable state between threads
+- Don't ignore AI model initialization failures
+
+This project is 75% complete with excellent foundations. The core challenge is completing the Llama translation inference to achieve the full vision of real-time Japanese transcription with English translation. 

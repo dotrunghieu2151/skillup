@@ -17,6 +17,7 @@
 #include "AudioFileWriter.hpp"
 #include "Components/TranscribeUIComponent.hpp"
 #include "Core/Application.hpp"
+#include "MarinaTranslator.hpp"
 #include "WhisperTranscriber.hpp"
 
 namespace Transcribe {
@@ -42,6 +43,7 @@ private:
 
   // Whisper transcription
   std::unique_ptr<WhisperTranscriber> whisperTranscriber{nullptr};
+  std::unique_ptr<Translate::MarinaTranslator> marinaTranslator{nullptr};
   bool isTranscribing{false};
   bool autoStartTranscription{true};
   bool recordingWithTranscription{
@@ -67,6 +69,7 @@ public:
         inputDevices{controller.GetInputDevices()},
         outputDevices{controller.GetOutputDevices()},
         whisperTranscriber{CreateWhisperTranscriber()},
+        marinaTranslator{CreateMarinaTranslator()},
         transcribeUIComponent{std::make_shared<TranscribeUIComponent>(
             open, recordAudioDataPtr, recordAudioDataSize, inputDevices,
             outputDevices, isRecording, isPlayingBack,
@@ -152,28 +155,15 @@ public:
                 !showLoadingPopup) {
               StartTranscription();
             }
-            start = recordAudioData.size();
-            std::vector<float> resampled_samples =
-                whisperTranscriber->ResampleAudioSoXR(
-                    recordBuffer.buffer, recordBuffer.size, 48000, 16000, 2);
-            recordAudioData.insert(recordAudioData.end(),
-                                   resampled_samples.begin(),
-                                   resampled_samples.end());
             // Process audio for real-time transcription
-
             ProcessAudioForTranscription(recordBuffer.buffer, recordBuffer.size,
                                          48000);
-            recordAudioDataPtr = &recordAudioData[start];
-            recordAudioDataSize = static_cast<int>(std::min(
-                recordAudioData.size(), (size_t)resampled_samples.size()));
-          } else {
-            // Store audio data for playback
-            start = recordAudioData.size();
-            recordAudioData.insert(recordAudioData.end(), recordBuffer.buffer,
-                                   recordBuffer.buffer + recordBuffer.size);
-            recordAudioDataPtr = &recordAudioData[start];
-            recordAudioDataSize = static_cast<int>(recordBuffer.size);
           }
+          start = recordAudioData.size();
+          recordAudioData.insert(recordAudioData.end(), recordBuffer.buffer,
+                                 recordBuffer.buffer + recordBuffer.size);
+          recordAudioDataPtr = &recordAudioData[start];
+          recordAudioDataSize = static_cast<int>(recordBuffer.size);
         }
       } else if (recordStream->IsStopped()) {
         recordStream = nullptr;
@@ -251,12 +241,12 @@ private:
   std::unique_ptr<WhisperTranscriber> CreateWhisperTranscriber() {
     WhisperTranscriber::Config config;
     config.model_path =
-        "Assets/LLM/WhisperModels/ggml-small.en.bin"; // Large
-                                                      // turbo
-                                                      // model for
-                                                      // better
-                                                      // Japanese
-    config.language = "en";                           // Japanese input
+        "Assets/LLM/WhisperModels/ggml-large-v3-turbo-q8_0.bin"; // Large
+                                                                 // turbo
+                                                                 // model for
+                                                                 // better
+                                                                 // Japanese
+    config.language = "ja";             // Japanese input
     config.translate_to_english = true; // We want original Japanese
     config.use_gpu = true;
     config.n_threads = 4;
@@ -264,6 +254,14 @@ private:
     config.segment_length_ms = 10000; // Slightly longer for Japanese processing
     config.overlap_ms = 2000; // More overlap for better Japanese context
     return std::make_unique<WhisperTranscriber>(config);
+  }
+
+  std::unique_ptr<Translate::MarinaTranslator> CreateMarinaTranslator() {
+    Translate::MarinaTranslator::Config config;
+    config.model_path =
+        "Assets/LLM/Llama/webbigdata_gemma-2-2b-jpn-it-translate-gguf_gemma-2-"
+        "2b-jpn-it-translate-Q4_K_M.gguf";
+    return std::make_unique<Translate::MarinaTranslator>(config);
   }
 
 public:
@@ -287,19 +285,29 @@ public:
       bool success = false;
       if (whisperTranscriber) {
         success = whisperTranscriber->Initialize();
+      }
 
-        if (success) {
-          // Start real-time transcription
-          success = whisperTranscriber->StartRealTimeTranscription(
-              [this](const TranscriptionResult& result) {
-                // Update current English translation
-                if (!result.text.empty()) {
-                  if (whisperTranscriber->GetConfig().translate_to_english) {
-                    currentEnglishTranslation += "\n" + result.text;
-                  } else {
-                    currentJapaneseTranscription += "\n" + result.text;
-                  }
+      if (marinaTranslator &&
+          whisperTranscriber->GetConfig().translate_to_english) {
+        success = marinaTranslator->Initialize();
+      }
+
+      if (success) {
+        whisperTranscriber->StartRealTimeTranscription(
+            [this](const TranscriptionResult& result) {
+              // Update current English translation
+              if (!result.text.empty()) {
+                currentJapaneseTranscription += "\n" + result.text;
+                if (whisperTranscriber->GetConfig().translate_to_english) {
+                  marinaTranslator->ProcessText(result.text.c_str(),
+                                                result.text.size());
                 }
+              }
+            });
+        if (whisperTranscriber->GetConfig().translate_to_english) {
+          marinaTranslator->StartRealTimeTranslation(
+              [this](const std::string& result) {
+                currentEnglishTranslation += "\n" + result;
               });
         }
       }
@@ -315,6 +323,9 @@ public:
   void StopTranscription() {
     if (whisperTranscriber) {
       whisperTranscriber->StopRealTimeTranscription();
+    }
+    if (marinaTranslator) {
+      marinaTranslator->StopRealTimeTranslation();
     }
     isTranscribing = false;
   }
@@ -355,7 +366,7 @@ public:
 
     // Save as 16-bit PCM WAV for better compatibility
     bool success =
-        AudioFileWriter::WriteWAV(fullPath, recordAudioData, 16000, 2);
+        AudioFileWriter::WriteWAV(fullPath, recordAudioData, 48000, 2);
 
     if (success) {
       // Log success with recording mode info

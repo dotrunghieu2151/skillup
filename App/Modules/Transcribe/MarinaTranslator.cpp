@@ -77,39 +77,27 @@ void MarinaTranslator::StopRealTimeTranslation() {
   translationThread.request_stop();
 }
 
-void MarinaTranslator::ProcessText(const std::string& text) {
+void MarinaTranslator::ProcessText(const char* text, int size) {
   if (!IsModelLoaded()) {
     return;
   }
 
   // write to stream
-  m_Stream.Write(text.c_str(), text.size());
+  m_Stream.Write(text, size);
 }
 
 void MarinaTranslator::TranslationLoop(std::stop_token s) {
-  std::string result;
-  std::string input;
-  result.reserve(1024 * 3);
-  input.reserve(1024 * 3);
   while (!s.stop_requested()) {
     const Core::Stream<char>::Buffer& buffer = m_Stream.Read();
     if (!buffer.size) {
       std::this_thread::yield();
       continue;
     }
-    if (!result.empty()) {
-      result.clear();
-    }
-    if (!input.empty()) {
-      input.clear();
-    }
 
-    input.assign(buffer.buffer, buffer.buffer + buffer.size);
+    Translate(buffer.buffer, buffer.size);
 
-    result = Translate(input);
-
-    if (!result.empty() && m_Callback) {
-      m_Callback(result);
+    if (!m_Translator.value().response.empty() && m_Callback) {
+      m_Callback(m_Translator.value().response);
     }
 
     std::this_thread::yield();
@@ -117,14 +105,15 @@ void MarinaTranslator::TranslationLoop(std::stop_token s) {
 }
 
 const std::string& MarinaTranslator::Translate(const char* text, int size) {
-  return Translate(std::string(text, size));
+  if (!IsModelLoaded()) {
+    static const std::string empty;
+    return empty;
+  }
+  return m_Translator.value().Generate(text, size);
 }
 
 const std::string& MarinaTranslator::Translate(const std::string& text) {
-  if (!IsModelLoaded()) {
-    return "";
-  }
-  return m_Translator.value().Generate(text);
+  return Translate(text.c_str(), static_cast<int>(text.size()));
 }
 
 std::vector<std::string> MarinaTranslator::GetSupportedLanguages() const {

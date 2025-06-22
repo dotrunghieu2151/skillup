@@ -53,7 +53,7 @@ bool WhisperTranscriber::LoadModel() {
     std::cerr << "Model file not found: " << m_Config.model_path << std::endl;
     return false;
   }
-  // ggml_backend_load_all();
+  ggml_backend_load_all();
 
   // Initialize whisper context
   struct whisper_context_params cparams = whisper_context_default_params();
@@ -133,12 +133,13 @@ void WhisperTranscriber::StopRealTimeTranscription() {
 void WhisperTranscriber::ProcessAudioBuffer(const float* samples,
                                             int sample_count, int sample_rate) {
   if (sample_rate != WHISPER_SAMPLE_RATE) {
-    std::vector<float> resampled_samples = ResampleAudioSoXR(
-        samples, sample_count, sample_rate, WHISPER_SAMPLE_RATE, 2);
     std::vector<float> mono_samples;
-    ConvertStereoToMono(resampled_samples.data(), resampled_samples.size(),
-                        mono_samples);
-    m_AudioStream.Write(mono_samples.data(), mono_samples.size());
+    ConvertStereoToMono(samples, sample_count, mono_samples);
+    std::vector<float> resampled_samples =
+        ResampleAudioSoXR(mono_samples.data(), mono_samples.size(), sample_rate,
+                          WHISPER_SAMPLE_RATE, 1);
+
+    m_AudioStream.Write(resampled_samples.data(), resampled_samples.size());
   } else {
     m_AudioStream.Write(samples, sample_count);
   }
@@ -152,14 +153,13 @@ void WhisperTranscriber::TranscriptionLoop(std::stop_token s) {
 
   auto last_process_time = std::chrono::steady_clock::now();
   m_AudioDataBufferOld.reserve(overlap_samples);
-
+  std::vector<float> segment_data(segment_samples);
   while (!s.stop_requested()) {
     const Core::Stream<float>::Buffer& buffer = m_AudioStream.Read();
     if (!buffer.size) {
       std::this_thread::yield();
       continue;
     }
-    std::vector<float> segment_data(segment_samples);
 
     segment_data.assign(buffer.buffer, buffer.buffer + buffer.size);
 
@@ -173,7 +173,7 @@ void WhisperTranscriber::TranscriptionLoop(std::stop_token s) {
       segment.samples = std::move(segment_data);
       segment.sample_rate = WHISPER_SAMPLE_RATE;
       segment.timestamp_ms = timestamp_ms;
-      std::cout << "Segment: " << segment.timestamp_ms << std::endl;
+      std::cout << "Segment: " << segment.samples.size() << std::endl;
       auto result = ProcessSegment(segment);
       std::cout << "Result: " << result.text << std::endl;
 
@@ -212,6 +212,7 @@ WhisperTranscriber::ProcessSegment(const AudioSegment& segment) {
 
   // Extract results
   const int n_segments = whisper_full_n_segments(m_Context);
+  std::cout << "n_segments: " << n_segments << std::endl;
 
   std::string full_text;
   float total_confidence = 0.0f;
@@ -298,7 +299,7 @@ std::vector<float> WhisperTranscriber::ResampleAudioSoXR(const float* samples,
   soxr_io_spec_t io_spec = soxr_io_spec(SOXR_FLOAT32_I, SOXR_FLOAT32_I);
 
   // Configure quality (SOXR_HQ for high quality)
-  soxr_quality_spec_t quality_spec = soxr_quality_spec(SOXR_HQ, 0);
+  soxr_quality_spec_t quality_spec = soxr_quality_spec(SOXR_VHQ, 0);
 
   // Create resampler for 2-channel interleaved stereo
   soxr_t resampler = soxr_create(input_rate, output_rate, channels, &error,
@@ -332,7 +333,7 @@ std::vector<float> WhisperTranscriber::ResampleAudioSoXR(const float* samples,
 
   size_t flushed = 0;
   error = soxr_process(resampler, NULL, 0, NULL, // no more input
-                       output.data() + output_generated * 2,
+                       output.data() + output_generated * channels,
                        olen - output_generated,
                        &flushed // flush output
   );
@@ -349,7 +350,6 @@ std::vector<float> WhisperTranscriber::ResampleAudioSoXR(const float* samples,
   // input_rate
   //           << "Hz -> " << output_generated << " samples @ " << output_rate
   //           << "Hz (used " << input_used << " input samples)" << std::endl;
-
   return output;
 }
 
