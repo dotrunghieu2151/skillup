@@ -146,7 +146,21 @@ Documentation:       🚧 80% Complete
 
 ## 📈 Recent Achievements
 
-### Latest Development Session (Qwen Integration)
+### Latest Development Session (Batch Size & Token Management)
+- **Batch Size Fix**: Increased n_batch from 512 to 2048 to handle conversation history
+- **Token-Aware Context**: Implemented smart context management using token estimation
+- **Safety Checks**: Added batch limit validation before llama_decode calls
+- **Debugging Output**: Added logging for context management decisions
+- **Error Prevention**: Proactive context trimming to prevent GGML_ASSERT failures
+
+### Previous Session (Context-Aware Translation)
+- **Context Management**: Implemented conversation history for translation consistency
+- **Memory Management**: Automatic context window management (keeps last 5 translation pairs)
+- **Prompt Enhancement**: Updated prompts to emphasize context usage and consistency
+- **Session Management**: Added ability to clear translation history between sessions
+- **Memory Safety**: Proper cleanup of conversation history strings
+
+### Previous Session (Qwen Integration)  
 - **Model Upgrade**: Migrated from Gemma-2-2b to Qwen3-4B model
 - **Thinking Mode Fix**: Configured Qwen3 for direct translation output
 - **Prompt Engineering**: Implemented `/no_think` directive for clean results

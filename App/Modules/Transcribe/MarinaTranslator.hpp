@@ -58,6 +58,13 @@ public:
   bool IsModelLoaded() const { return m_Translator.has_value(); }
   std::vector<std::string> GetSupportedLanguages() const;
 
+  // Context management
+  void ClearTranslationHistory() {
+    if (m_Translator.has_value()) {
+      m_Translator.value().ClearConversationHistory();
+    }
+  }
+
 private:
   struct LlamaTranslator {
     llama_model* model;
@@ -68,24 +75,31 @@ private:
     std::vector<llama_chat_message> chat_messages;
     std::vector<char> formatted;
     std::string response;
+    bool conversation_initialized = false;
+    int max_context_pairs = 5;   // Keep last 5 translation pairs for context
+    int max_batch_tokens = 1800; // Leave room under n_batch limit for safety
 
     // Static helper function for creating translation prompts optimized for
     // Qwen3
     static std::string create_translation_prompt() {
       return "/no_think You are an expert translator specializing in Japanese "
-             "to English "
-             "translation. "
+             "to English translation. "
              "Your task is to provide accurate, natural, and culturally "
-             "appropriate translations.\n\n"
+             "appropriate translations while maintaining consistency with "
+             "previous translations.\n\n"
              "Guidelines:\n"
              "- Translate the Japanese text into fluent, natural English\n"
              "- Preserve the original meaning, tone, and intent\n"
              "- Maintain appropriate formality levels\n"
              "- Handle cultural references and idioms appropriately\n"
+             "- Use previous translations as context for consistency\n"
+             "- Maintain speaker identity and conversation flow\n"
+             "- Keep consistent terminology and style throughout\n"
              "- Provide only the English translation without explanations\n"
-             "- Consider previous context when translating\n"
-             "- Consider previous translation results as context\n"
-             "- Do not show your thinking process\n\n";
+             "- Do not show your thinking process\n\n"
+             "Important: This is part of an ongoing conversation. Use the "
+             "previous Japanese-English pairs to understand context, maintain "
+             "consistency, and provide coherent translations.\n\n";
     }
 
     LlamaTranslator(const std::string& model_path, int ngl = 99,
@@ -118,8 +132,9 @@ private:
 
       vocab = llama_model_get_vocab(model);
       llama_context_params ctx_params = llama_context_default_params();
-      ctx_params.n_ctx = 4096;  // Larger context for Japanese
-      ctx_params.n_batch = 512; // Use appropriate batch size for translation
+      ctx_params.n_ctx = 4096; // Larger context for Japanese
+      ctx_params.n_batch =
+          2048; // Increased batch size to handle conversation history
 
       ctx = llama_init_from_model(model, ctx_params);
 
@@ -144,6 +159,12 @@ private:
     }
 
     ~LlamaTranslator() {
+      // Clean up strdup'd chat message content
+      for (auto& msg : chat_messages) {
+        free((void*)msg.content);
+      }
+      chat_messages.clear();
+
       llama_sampler_free(smpl);
       llama_free(ctx);
       llama_model_free(model);
@@ -179,9 +200,40 @@ private:
       // Get the model's chat template
       const char* tmpl = llama_model_chat_template(model, nullptr);
 
-      // Clear previous messages and set up new conversation
-      chat_messages.clear();
-      chat_messages.push_back({"system", strdup(system_prompt.c_str())});
+      // Initialize conversation with system prompt only once
+      if (!conversation_initialized) {
+        chat_messages.clear();
+        chat_messages.push_back({"system", strdup(system_prompt.c_str())});
+        conversation_initialized = true;
+      }
+
+      // Manage context window using token-aware approach
+      // First try to estimate current token count
+      int estimated_tokens = EstimateTokenCount();
+      int pair_count = (chat_messages.size() - 1) / 2; // Exclude system message
+
+      // Remove oldest pairs if we exceed token limit or pair limit
+      if ((estimated_tokens > max_batch_tokens ||
+           pair_count >= max_context_pairs) &&
+          chat_messages.size() > 3) {
+        std::printf(
+            "Context management: %d tokens, %d pairs - trimming history\n",
+            estimated_tokens, pair_count);
+      }
+
+      while ((estimated_tokens > max_batch_tokens ||
+              pair_count >= max_context_pairs) &&
+             chat_messages.size() > 3) {
+        // Keep system message (index 0), remove oldest user/assistant pair
+        free((void*)chat_messages[1].content); // Free user message
+        free((void*)chat_messages[2].content); // Free assistant message
+        chat_messages.erase(chat_messages.begin() + 1,
+                            chat_messages.begin() + 3);
+        pair_count--;
+        estimated_tokens = EstimateTokenCount(); // Recalculate
+      }
+
+      // Add current user message
       chat_messages.push_back({"user", strdup(user_message.c_str())});
 
       int new_len = llama_chat_apply_template(
@@ -257,6 +309,14 @@ private:
       llama_memory_t memory = llama_get_memory(ctx);
       llama_memory_clear(memory, false);
 
+      // Safety check: ensure we don't exceed batch limit
+      if (prompt_tokens.size() > (size_t)llama_n_batch(ctx)) {
+        std::printf("Error: Prompt tokens (%zu) exceed batch limit (%d)\n",
+                    prompt_tokens.size(), llama_n_batch(ctx));
+        response.clear();
+        return response;
+      }
+
       llama_batch batch =
           llama_batch_get_one(prompt_tokens.data(), prompt_tokens.size());
 
@@ -273,6 +333,7 @@ private:
         }
 
         if (llama_decode(ctx, batch)) {
+          std::printf("llama_decode failed, stopping generation\n");
           break;
         }
         // Sample next token
@@ -326,7 +387,52 @@ private:
         response.pop_back();
       }
 
+      // Add the assistant's response to conversation history for future context
+      if (!response.empty()) {
+        chat_messages.push_back({"assistant", strdup(response.c_str())});
+      }
+
       return response;
+    }
+
+  private:
+    // Estimate token count for current conversation
+    int EstimateTokenCount() {
+      if (chat_messages.empty())
+        return 0;
+
+      // Create a temporary formatted version to count tokens
+      const char* tmpl = llama_model_chat_template(model, nullptr);
+      if (!tmpl)
+        return 0;
+
+      // Try to apply template and get length
+      int estimated_len = llama_chat_apply_template(
+          tmpl, chat_messages.data(), chat_messages.size(), true, nullptr, 0);
+
+      if (estimated_len <= 0)
+        return 0;
+
+      // Rough estimate: average 3-4 characters per token for mixed
+      // Japanese/English
+      return estimated_len / 3;
+    }
+
+  public:
+    // Method to clear conversation history and start fresh
+    void ClearConversationHistory() {
+      // Clean up existing content (except system message if it exists)
+      for (size_t i = 1; i < chat_messages.size(); i++) {
+        free((void*)chat_messages[i].content);
+      }
+
+      // Keep only system message if conversation was initialized
+      if (conversation_initialized && !chat_messages.empty()) {
+        chat_messages.resize(1); // Keep only system message
+      } else {
+        chat_messages.clear();
+        conversation_initialized = false;
+      }
     }
   };
   Config m_Config;

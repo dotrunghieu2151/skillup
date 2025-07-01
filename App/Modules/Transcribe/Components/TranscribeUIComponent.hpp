@@ -239,7 +239,7 @@ public:
       ImGui::PushFont(Core::Application::Get().GetFont("JP"));
       ImGui::InputTextMultiline(
           "##transcription", const_cast<char*>(m_CurrentTranscription.c_str()),
-          m_CurrentTranscription.length() + 1, ImVec2(-1, 80),
+          m_CurrentTranscription.length() + 1, ImVec2(-1, 150),
           ImGuiInputTextFlags_ReadOnly);
       ImGui::PopFont();
       ImGui::PopStyleColor();
@@ -250,8 +250,8 @@ public:
       // Calculate responsive size based on available content region
       ImVec2 availableSize = ImGui::GetContentRegionAvail();
       float responsiveHeight = std::max(
-          80.0f,
-          availableSize.y * 0.3f); // At least 80px, or 30% of available height
+          150.0f,
+          availableSize.y * 0.4f); // At least 150px, or 40% of available height
 
       ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
       ImGui::InputTextMultiline(

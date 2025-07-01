@@ -258,7 +258,7 @@ private:
 
   std::unique_ptr<Translate::MarinaTranslator> CreateMarinaTranslator() {
     Translate::MarinaTranslator::Config config;
-    config.model_path = "Assets/LLM/Llama/Qwen3-4B-Q4_K_S.gguf";
+    config.model_path = "Assets/LLM/Llama/Qwen3-8B-Q4_K_S.gguf";
     return std::make_unique<Translate::MarinaTranslator>(config);
   }
 
@@ -398,7 +398,13 @@ public:
   // Clear recording data (useful for starting fresh)
   void ClearRecording() {
     recordAudioData.clear();
+    currentJapaneseTranscription.clear();
     currentEnglishTranslation.clear();
+
+    // Clear translation history for fresh context
+    if (marinaTranslator) {
+      marinaTranslator->ClearTranslationHistory();
+    }
   }
 };
 } // namespace Transcribe

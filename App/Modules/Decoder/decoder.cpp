@@ -6,7 +6,7 @@
 
 int main(int argc, char* argv[]) {
 
-  std::string model_path{"./Assets/LLM/Llama/Qwen3-4B-Q4_K_S.gguf"};
+  std::string model_path{"./Assets/LLM/Llama/Qwen3-8B-Q4_K_S.gguf"};
   // prompt to generate text from
   std::string prompt = "Translate to English: "
                        "本ポジションでは、IT統括部の一員としてAWS環境におけるア"
