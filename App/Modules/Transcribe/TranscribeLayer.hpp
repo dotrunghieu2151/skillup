@@ -258,9 +258,7 @@ private:
 
   std::unique_ptr<Translate::MarinaTranslator> CreateMarinaTranslator() {
     Translate::MarinaTranslator::Config config;
-    config.model_path =
-        "Assets/LLM/Llama/webbigdata_gemma-2-2b-jpn-it-translate-gguf_gemma-2-"
-        "2b-jpn-it-translate-Q4_K_M.gguf";
+    config.model_path = "Assets/LLM/Llama/Qwen3-4B-Q4_K_S.gguf";
     return std::make_unique<Translate::MarinaTranslator>(config);
   }
 

@@ -12,7 +12,7 @@ add_subdirectory(Modules/Transcribe)
 
 target_link_libraries(skillup PRIVATE Transcribe)
 
-# add_subdirectory(Modules/Decoder)
+add_subdirectory(Modules/Decoder)
 
 
 # Copy assets only when they change

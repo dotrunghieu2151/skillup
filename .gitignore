@@ -11,3 +11,8 @@ imgui.ini
 /Vendors/*/build/
 /Vendors/*/out/
 /Assets/LLM/*
+
+/Modelsgguf/*
+
+.cursorrules
+.env

@@ -127,10 +127,12 @@ Documentation:       🚧 80% Complete
 **Status**: Fully implemented and functional
 **Location**: `App/Modules/Transcribe/MarinaTranslator.hpp:124-237`
 **Features Implemented**: 
-- Real-time Japanese→English translation
-- Optimized prompt engineering for Gemma-2-2b model
+- Real-time Japanese→English translation with Qwen3-4B model
+- Optimized prompt engineering with `/no_think` directive for direct output
 - Proper llama-cpp API usage with error handling
 - Performance optimizations for streaming
+- Non-thinking mode configuration (Temperature=0.7, TopP=0.8, TopK=20)
+- Automatic removal of `<think>` tags for clean output
 
 ### 2. Integration Testing
 **Impact**: Medium - Unknown system stability
@@ -144,7 +146,14 @@ Documentation:       🚧 80% Complete
 
 ## 📈 Recent Achievements
 
-### Last Development Session
+### Latest Development Session (Qwen Integration)
+- **Model Upgrade**: Migrated from Gemma-2-2b to Qwen3-4B model
+- **Thinking Mode Fix**: Configured Qwen3 for direct translation output
+- **Prompt Engineering**: Implemented `/no_think` directive for clean results
+- **Sampling Optimization**: Applied Qwen3-specific parameters for non-thinking mode
+- **Output Cleaning**: Added automatic removal of thinking tags
+
+### Previous Development Session
 - Completed Marina Translator architecture
 - Integrated Llama.cpp build system
 - Updated CMakeLists.txt for translation module
